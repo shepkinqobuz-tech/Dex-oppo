@@ -1,6 +1,7 @@
 package ru.oppodesk;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -167,11 +168,16 @@ public class DesktopActivity extends Activity {
         // открывается на том же экране. Если прошивка всё же отправит его
         // на телефон, окно будет перенесено командой оболочки.
         try {
-            startActivity(new Intent(Intent.ACTION_MAIN)
+            Intent launch = new Intent(Intent.ACTION_MAIN)
                     .addCategory(Intent.CATEGORY_LAUNCHER)
                     .setComponent(e.component)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
+                            | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            // Prefer the public Android display-targeting API over shell task moves.
+            // ColorOS may ignore this hint; the existing Shizuku fallback remains.
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(s.displayId());
+            startActivity(launch, options.toBundle());
             if (Sh.ready()) Apps.ensureOnDisplay(e, s.displayId());
         } catch (Exception ex) {
             s.launch(e);
