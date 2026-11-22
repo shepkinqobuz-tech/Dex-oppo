@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OppoDesk</string>
+    <string name="service_label">OppoDesk: курсор и панель задач</string>
+    <string name="service_desc">Рисует курсор и панель задач на внешнем экране и передаёт нажатия с тачпада телефона. Содержимое экрана не читает и никуда не отправляет.</string>
+</resources>

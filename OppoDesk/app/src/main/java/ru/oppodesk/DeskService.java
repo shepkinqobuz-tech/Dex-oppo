@@ -1,0 +1,369 @@
+package ru.oppodesk;
+
+import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.hardware.display.DisplayManager;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
+import android.view.Display;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowManager;
+import android.view.accessibility.AccessibilityEvent;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextClock;
+import android.widget.TextView;
+
+/**
+ * Служба специальных возможностей: рисует на внешнем экране панель задач и курсор,
+ * превращает жесты с тачпада телефона в нажатия на внешнем экране.
+ */
+public class DeskService extends AccessibilityService implements DisplayManager.DisplayListener {
+    static DeskService instance;
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private DisplayManager dm;
+    private WindowManager wm;
+    private Context winCtx;
+    private int displayId = Display.INVALID_DISPLAY;
+    private int width, height, barHeight;
+    private float x, y, density = 1f;
+    private int dpi;
+    private CursorView cursor;
+    private LinearLayout bar, recentBox;
+    private float scrollX, scrollY;
+    private boolean gestureBusy;
+
+    @Override
+    protected void onServiceConnected() {
+        instance = this;
+        dm = getSystemService(DisplayManager.class);
+        dm.registerDisplayListener(this, handler);
+        attach();
+    }
+
+    @Override
+    public boolean onUnbind(Intent intent) {
+        detach();
+        if (dm != null) dm.unregisterDisplayListener(this);
+        instance = null;
+        return super.onUnbind(intent);
+    }
+
+    @Override public void onAccessibilityEvent(AccessibilityEvent event) {}
+    @Override public void onInterrupt() {}
+
+    @Override public void onDisplayAdded(int id) { attach(); }
+    @Override public void onDisplayChanged(int id) {
+        if (!hasDisplay()) {
+            attach();
+            return;
+        }
+        if (id != displayId) return;
+        Display d = dm.getDisplay(id);
+        if (d == null) return;
+        DisplayMetrics m = new DisplayMetrics();
+        d.getRealMetrics(m);
+        if (m.densityDpi != dpi || m.widthPixels != width || m.heightPixels != height) {
+            // Размер или плотность экрана изменились — панель и курсор надо построить заново.
+            detach();
+            attach();
+        }
+    }
+    @Override public void onDisplayRemoved(int id) {
+        if (id == displayId) detach();
+    }
+
+    boolean hasDisplay() { return displayId != Display.INVALID_DISPLAY; }
+    int displayId() { return displayId; }
+    String displayInfo() { return width + "×" + height; }
+
+    /** Область экрана над панелью задач. */
+    Rect workArea() { return new Rect(0, 0, width, height - barHeight); }
+
+    static Display findExternal(DisplayManager dm) {
+        for (Display d : dm.getDisplays()) {
+            if (d.getDisplayId() == Display.DEFAULT_DISPLAY) continue;
+            if ((d.getFlags() & Display.FLAG_PRIVATE) != 0) continue;
+            if (d.getState() == Display.STATE_OFF) continue;
+            return d;
+        }
+        return null;
+    }
+
+    private int dp(float v) { return Math.round(v * density); }
+
+    /** Текст последней ошибки — показывается на экране телефона для диагностики. */
+    String lastError = "";
+
+    private Context candidate(Display d, int n) {
+        int type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
+        switch (n) {
+            case 0: return createDisplayContext(d);
+            case 1: return createWindowContext(d, type, null);
+            default: return createDisplayContext(d).createWindowContext(type, null);
+        }
+    }
+
+    void attach() {
+        if (hasDisplay()) return;
+        Display d = findExternal(dm);
+        if (d == null) return;
+        StringBuilder errors = new StringBuilder();
+        for (int n = 0; n < 3; n++) {
+            try {
+                winCtx = candidate(d, n);
+                wm = (WindowManager) winCtx.getSystemService(Context.WINDOW_SERVICE);
+                DisplayMetrics m = new DisplayMetrics();
+                d.getRealMetrics(m);
+                density = m.density;
+                dpi = m.densityDpi;
+                width = m.widthPixels;
+                height = m.heightPixels;
+                barHeight = dp(48);
+                x = width / 2f;
+                y = height / 2f;
+                addBar();
+                addCursor();
+                displayId = d.getDisplayId();
+                lastError = "";
+                applyScale();
+                showDesktop();
+                return;
+            } catch (Throwable e) {
+                errors.append("\n[").append(n).append("] ").append(e);
+                cleanup();
+            }
+        }
+        lastError = "Не удалось вывести панель на монитор:" + errors;
+    }
+
+    private void cleanup() {
+        if (wm != null) {
+            try { if (bar != null) wm.removeView(bar); } catch (Exception ignored) {}
+            try { if (cursor != null) wm.removeView(cursor); } catch (Exception ignored) {}
+        }
+        bar = null;
+        recentBox = null;
+        cursor = null;
+        wm = null;
+    }
+
+    private void detach() {
+        cleanup();
+        displayId = Display.INVALID_DISPLAY;
+    }
+
+    // ---------- панель задач ----------
+
+    private TextView barButton(String text, View.OnClickListener l) {
+        TextView t = new TextView(winCtx);
+        t.setText(text);
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(16), 0, dp(16), 0);
+        t.setOnClickListener(l);
+        return t;
+    }
+
+    private void addBar() {
+        bar = new LinearLayout(winCtx);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setBackgroundColor(0xF01B1F27);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams full = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
+        bar.addView(barButton("▦  Пуск", v -> showDesktop()), full);
+        bar.addView(barButton("◀", v -> back()), full);
+
+        recentBox = new LinearLayout(winCtx);
+        recentBox.setOrientation(LinearLayout.HORIZONTAL);
+        recentBox.setGravity(Gravity.CENTER_VERTICAL);
+        bar.addView(recentBox, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+
+        TextClock clock = new TextClock(winCtx);
+        clock.setFormat24Hour("HH:mm   dd.MM");
+        clock.setFormat12Hour("HH:mm   dd.MM");
+        clock.setTextColor(Color.WHITE);
+        clock.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        clock.setPadding(dp(16), 0, dp(20), 0);
+        bar.addView(clock);
+
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, barHeight,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+        lp.gravity = Gravity.BOTTOM;
+        wm.addView(bar, lp);
+        refreshRecent();
+    }
+
+    void refreshRecent() {
+        if (recentBox == null) return;
+        recentBox.removeAllViews();
+        int size = dp(34), pad = dp(7);
+        for (final Apps.Entry e : Apps.recent) {
+            ImageView iv = new ImageView(winCtx);
+            iv.setImageDrawable(e.icon);
+            iv.setPadding(pad, pad, pad, pad);
+            iv.setOnClickListener(v -> launch(e));
+            recentBox.addView(iv, new LinearLayout.LayoutParams(size + pad * 2, size + pad * 2));
+        }
+    }
+
+    void launch(Apps.Entry e) {
+        if (!hasDisplay()) return;
+        if (!Sh.ready()) {
+            lastError = "Shizuku не запущен или не дал разрешение — приложения открыть нельзя";
+            return;
+        }
+        lastError = "";
+        Apps.launch(e, displayId);
+    }
+
+    /** Рабочий стол открывается на телефоне и сам переносит себя на монитор. */
+    void showDesktop() {
+        if (!hasDisplay()) return;
+        Intent i = new Intent(this, DesktopActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                        | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+        try {
+            startActivity(i);
+        } catch (Exception e) {
+            lastError = "Не удалось открыть рабочий стол:\n" + e;
+        }
+    }
+
+    /** Запоминает и применяет размер интерфейса на мониторе (плотность в dpi). */
+    void setScale(int value) {
+        getSharedPreferences(Apps.PREFS, MODE_PRIVATE).edit().putInt(Apps.KEY_DPI, value).apply();
+        applyScale();
+    }
+
+    /**
+     * Стандартная плотность внешнего экрана очень мала (128 dpi), из-за чего
+     * приложения считают его гигантским планшетом. Задаём свою.
+     */
+    void applyScale() {
+        if (!hasDisplay() || !Sh.ready()) return;
+        int value = getSharedPreferences(Apps.PREFS, MODE_PRIVATE)
+                .getInt(Apps.KEY_DPI, Apps.DEFAULT_DPI);
+        if (value != dpi) Sh.run("wm density " + value + " -d " + displayId);
+    }
+
+    void back() {
+        if (hasDisplay() && Sh.ready()) Sh.run("input -d " + displayId + " keyevent 4");
+        else performGlobalAction(GLOBAL_ACTION_BACK);
+    }
+
+    // ---------- курсор и жесты ----------
+
+    private void addCursor() {
+        cursor = new CursorView(winCtx);
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT);
+        wm.addView(cursor, lp);
+    }
+
+    void moveCursor(float dx, float dy) {
+        if (!hasDisplay()) return;
+        x = Math.max(0, Math.min(width - 1, x + dx));
+        y = Math.max(0, Math.min(height - 1, y + dy));
+        if (cursor != null) cursor.invalidate();
+        if (bar != null) {
+            // Панель задач прячется, чтобы не закрывать низ приложений,
+            // и появляется, когда курсор упирается в нижний край экрана.
+            if (y >= height - 3) bar.setVisibility(View.VISIBLE);
+            else if (y < height - barHeight - dp(8)) bar.setVisibility(View.GONE);
+        }
+    }
+
+    void click() { press(50); }
+    void longClick() { press(700); }
+
+    private void press(long ms) {
+        if (!hasDisplay()) return;
+        Path p = new Path();
+        p.moveTo(x, y);
+        dispatch(p, ms);
+    }
+
+    /** Прокрутка двумя пальцами: копим смещение и отправляем короткими свайпами. */
+    void scroll(float dx, float dy) {
+        if (!hasDisplay()) return;
+        scrollX += dx;
+        scrollY += dy;
+        if (gestureBusy || Math.hypot(scrollX, scrollY) < 24) return;
+        float tx = Math.max(1, Math.min(width - 2, x + scrollX));
+        float ty = Math.max(1, Math.min(height - barHeight - 2, y + scrollY));
+        scrollX = 0;
+        scrollY = 0;
+        Path p = new Path();
+        p.moveTo(x, Math.min(y, height - barHeight - 2));
+        p.lineTo(tx, ty);
+        dispatch(p, 70);
+    }
+
+    private void dispatch(Path p, long ms) {
+        GestureDescription.Builder b = new GestureDescription.Builder();
+        b.setDisplayId(displayId);
+        b.addStroke(new GestureDescription.StrokeDescription(p, 0, ms));
+        gestureBusy = true;
+        boolean ok = dispatchGesture(b.build(), new GestureResultCallback() {
+            @Override public void onCompleted(GestureDescription g) { gestureBusy = false; }
+            @Override public void onCancelled(GestureDescription g) { gestureBusy = false; }
+        }, handler);
+        if (!ok) gestureBusy = false;
+    }
+
+    private final class CursorView extends View {
+        private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path arrow = new Path();
+
+        CursorView(Context c) {
+            super(c);
+            float s = dp(1);
+            fill.setColor(Color.WHITE);
+            stroke.setColor(Color.BLACK);
+            stroke.setStyle(Paint.Style.STROKE);
+            stroke.setStrokeWidth(1.5f * s);
+            arrow.moveTo(0, 0);
+            arrow.lineTo(0, 18 * s);
+            arrow.lineTo(4.5f * s, 14 * s);
+            arrow.lineTo(8 * s, 21 * s);
+            arrow.lineTo(10.5f * s, 20 * s);
+            arrow.lineTo(7.5f * s, 13 * s);
+            arrow.lineTo(13 * s, 13 * s);
+            arrow.close();
+        }
+
+        @Override
+        protected void onDraw(Canvas c) {
+            c.translate(x, y);
+            c.drawPath(arrow, fill);
+            c.drawPath(arrow, stroke);
+        }
+    }
+}
