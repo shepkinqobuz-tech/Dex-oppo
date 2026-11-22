@@ -17,6 +17,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".DiagnosticsActivity" android:exported="false" />
         <activity android:name=".DesktopActivity" android:exported="false"
             android:launchMode="singleTask" android:resizeableActivity="true"
             android:taskAffinity="ru.oppodesk.desktop"

@@ -73,6 +73,11 @@ public class MainActivity extends Activity {
         start.setOnClickListener(v -> startDesktop());
         root.addView(start);
 
+        Button diagnostics = new Button(this);
+        diagnostics.setText("Диагностика ColorOS и монитора");
+        diagnostics.setOnClickListener(v -> startActivity(new Intent(this, DiagnosticsActivity.class)));
+        root.addView(diagnostics);
+
         LinearLayout scale = new LinearLayout(this);
         scale.setOrientation(LinearLayout.HORIZONTAL);
         String[] names = {"Мелко", "Средне", "Крупно"};
