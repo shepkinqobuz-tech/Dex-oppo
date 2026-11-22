@@ -65,7 +65,7 @@ public final class DiagnosticsActivity extends Activity {
     }
     private void refresh() {
         StringBuilder s = new StringBuilder();
-        s.append("OppoDesk 0.9-dev1 | Только чтение\n");
+        s.append("OppoDesk 0.9-dev2 | Только чтение\n");
         s.append("Дата: ").append(DateFormat.getDateTimeInstance().format(new Date())).append("\n\n");
         s.append("УСТРОЙСТВО\n");
         s.append("Производитель: ").append(Build.MANUFACTURER).append("\n");
@@ -108,6 +108,7 @@ public final class DiagnosticsActivity extends Activity {
             s.append("Ошибка проверки Shizuku: ").append(e.getClass().getSimpleName()).append("\n");
         }
         if (!Sh.lastError.isEmpty()) s.append("Shizuku ошибка: ").append(Sh.lastError).append("\n");
+        s.append("Последняя shell-команда: ").append(Sh.lastResult).append("\n");
         s.append("\nВОЗМОЖНОСТИ\n");
         PackageManager pm = getPackageManager();
         s.append("Freeform: ").append(pm.hasSystemFeature("android.software.freeform_window_management")).append("\n");

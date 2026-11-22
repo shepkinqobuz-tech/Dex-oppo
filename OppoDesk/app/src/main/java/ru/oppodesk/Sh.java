@@ -14,6 +14,7 @@ import rikka.shizuku.Shizuku;
 final class Sh {
     /** Текст последней ошибки — показывается на экране телефона. */
     static volatile String lastError = "";
+    static volatile String lastResult = "Команды ещё не выполнялись";
     private static final ExecutorService pool = Executors.newSingleThreadExecutor();
 
     private Sh() {}
@@ -58,12 +59,16 @@ final class Sh {
                         if (out.length() < 400) out.append(line).append('\n');
                     }
                 }
-                p.waitFor();
-                String s = out.toString();
-                lastError = (s.contains("Exception") || s.contains("Error") || s.contains("NOTASK"))
-                        ? "Команда не выполнена:\n" + s.trim() : "";
+                int exitCode = p.waitFor();
+                String s = out.toString().trim();
+                lastResult = "Код завершения: " + exitCode + "\n"
+                        + (s.isEmpty() ? "(нет вывода)" : s);
+                lastError = (exitCode != 0 || s.contains("Exception")
+                        || s.contains("Error") || s.contains("NOTASK"))
+                        ? "Команда не выполнена:\n" + lastResult : "";
             } catch (Throwable t) {
                 lastError = "Shizuku: " + t;
+                lastResult = lastError;
             }
         });
     }

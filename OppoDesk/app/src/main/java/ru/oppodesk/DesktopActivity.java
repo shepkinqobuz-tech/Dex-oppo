@@ -1,6 +1,7 @@
 package ru.oppodesk;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.ActivityOptions;
 import android.content.Intent;
 import android.graphics.Color;
@@ -100,6 +101,10 @@ public class DesktopActivity extends Activity {
         grid.setVerticalSpacing(dp(12));
         grid.setAdapter(adapter);
         grid.setOnItemClickListener((p, v, pos, id) -> open(shown.get(pos)));
+        grid.setOnItemLongClickListener((p, v, pos, id) -> {
+            confirmFreeform(shown.get(pos));
+            return true;
+        });
         root.addView(grid, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         setContentView(root);
@@ -182,6 +187,32 @@ public class DesktopActivity extends Activity {
         } catch (Exception ex) {
             s.launch(e);
         }
+    }
+
+    /** Opt-in freeform experiment. Never changes global device settings. */
+    private void confirmFreeform(Apps.Entry entry) {
+        DeskService service = DeskService.instance;
+        if (service == null || !service.hasDisplay()) {
+            Toast.makeText(this, "Монитор не подключён", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!Sh.ready()) {
+            Toast.makeText(this, "Для теста требуется Shizuku", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Экспериментальное окно")
+                .setMessage("Попробовать открыть «" + entry.label
+                        + "» в свободном окне? ColorOS может проигнорировать запрос "
+                        + "и открыть приложение на весь экран. Системные настройки не изменяются.")
+                .setPositiveButton("Попробовать", (dialog, which) -> {
+                    Apps.launchFreeform(entry, service.displayId());
+                    Toast.makeText(this,
+                            "Запрос отправлен. Результат команды — в диагностике.",
+                            Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
     }
 
     private final class Adapter extends BaseAdapter {
