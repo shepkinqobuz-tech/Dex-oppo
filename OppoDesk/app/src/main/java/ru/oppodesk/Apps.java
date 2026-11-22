@@ -88,18 +88,6 @@ final class Apps {
         remember(e);
     }
 
-    /** Diagnostic-only freeform launch request (windowing mode 5). */
-    static void launchFreeform(Entry entry, int displayId) {
-        if (!Sh.ready() || displayId < 0) return;
-        String component = entry.component.flattenToShortString();
-        // ComponentName is resolved from PackageManager, not user-entered shell text.
-        Sh.run("am start --display " + displayId
-                + " --windowingMode 5 -a android.intent.action.MAIN"
-                + " -c android.intent.category.LAUNCHER -f 0x10200000 -n '"
-                + component + "'");
-        remember(entry);
-    }
-
     /** Приложение уже запущено обычным способом — только проверить, что оно на мониторе. */
     static void ensureOnDisplay(Entry e, int displayId) {
         Sh.run(mover(e.component.getPackageName(), displayId));
