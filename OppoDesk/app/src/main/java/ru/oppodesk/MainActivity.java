@@ -81,14 +81,15 @@ public class MainActivity extends Activity {
         LinearLayout scale = new LinearLayout(this);
         scale.setOrientation(LinearLayout.HORIZONTAL);
         String[] names = {"Мелко", "Средне", "Крупно"};
-        final int[] dpis = {160, 213, 280};
+        final int[] iconSizes = {40, 64, 96};
         for (int k = 0; k < names.length; k++) {
-            final int dpi = dpis[k];
+            final int iconSize = iconSizes[k];
             Button sb = new Button(this);
             sb.setText(names[k]);
             sb.setOnClickListener(v -> {
-                DeskService s = DeskService.instance;
-                if (s != null) s.setScale(dpi);
+                getSharedPreferences(Apps.PREFS, MODE_PRIVATE).edit()
+                        .putInt(Apps.KEY_ICON_SIZE, iconSize).apply();
+                DesktopActivity.refreshIcons();
             });
             scale.addView(sb, new LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -101,7 +102,7 @@ public class MainActivity extends Activity {
         root.addView(choose);
 
         TextView hint = new TextView(this);
-        hint.setText("Кнопки выше — размер интерфейса на мониторе. Тачпад: касание — клик, удержание или касание двумя пальцами — "
+        hint.setText("Кнопки выше — размер значков рабочего стола на мониторе. Тачпад: касание — клик, удержание или касание двумя пальцами — "
                 + "долгое нажатие, два пальца — прокрутка. Панель задач появляется, "
                 + "когда курсор упирается в нижний край монитора");
         hint.setTextColor(0x99FFFFFF);

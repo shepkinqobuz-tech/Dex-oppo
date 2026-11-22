@@ -26,6 +26,7 @@ final class Apps {
 
     static final String PREFS = "desk";
     static final String KEY_DPI = "dpi";
+    static final String KEY_ICON_SIZE = "icon_size";
     static final String KEY_APPS = "apps";
     /** Плотность монитора по умолчанию: 213 dpi даёт на Full HD экран 1440×810 dp. */
     static final int DEFAULT_DPI = 213;

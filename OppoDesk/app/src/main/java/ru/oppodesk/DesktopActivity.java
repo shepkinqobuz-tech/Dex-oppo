@@ -44,6 +44,8 @@ public class DesktopActivity extends Activity {
     private static DesktopActivity current;
     private boolean built;
     private String query = "";
+    private GridView appGrid;
+    private int iconSizeDp = 64;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -93,11 +95,15 @@ public class DesktopActivity extends Activity {
         sp.bottomMargin = dp(16);
         root.addView(search, sp);
 
+        iconSizeDp = getSharedPreferences(Apps.PREFS, MODE_PRIVATE)
+                .getInt(Apps.KEY_ICON_SIZE, 64);
         GridView grid = new GridView(this);
-        grid.setColumnWidth(dp(104));
+        appGrid = grid;
+        grid.setColumnWidth(dp(iconSizeDp + 52));
         grid.setNumColumns(GridView.AUTO_FIT);
         grid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
         grid.setVerticalSpacing(dp(12));
+        grid.setHorizontalSpacing(dp(8));
         grid.setAdapter(adapter);
         grid.setOnItemClickListener((p, v, pos, id) -> open(shown.get(pos)));
 
@@ -153,6 +159,20 @@ public class DesktopActivity extends Activity {
         if (a != null) a.runOnUiThread(() -> { if (a.built) a.filter(a.query); });
     }
 
+    static void refreshIcons() {
+        final DesktopActivity activity = current;
+        if (activity == null) return;
+        activity.runOnUiThread(() -> {
+            if (!activity.built || activity.appGrid == null) return;
+            activity.iconSizeDp = activity.getSharedPreferences(Apps.PREFS, MODE_PRIVATE)
+                    .getInt(Apps.KEY_ICON_SIZE, 64);
+            activity.appGrid.setColumnWidth(activity.dp(activity.iconSizeDp + 52));
+            activity.appGrid.setNumColumns(GridView.AUTO_FIT);
+            activity.adapter.notifyDataSetChanged();
+            activity.appGrid.requestLayout();
+        });
+    }
+
     @Override
     protected void onDestroy() {
         if (current == this) current = null;
@@ -199,7 +219,7 @@ public class DesktopActivity extends Activity {
                 cell.setGravity(Gravity.CENTER_HORIZONTAL);
                 cell.setPadding(dp(4), dp(8), dp(4), dp(8));
                 ImageView icon = new ImageView(DesktopActivity.this);
-                cell.addView(icon, new LinearLayout.LayoutParams(dp(52), dp(52)));
+                cell.addView(icon, new LinearLayout.LayoutParams(dp(iconSizeDp), dp(iconSizeDp)));
                 TextView label = new TextView(DesktopActivity.this);
                 label.setTextColor(Color.WHITE);
                 label.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
@@ -210,7 +230,12 @@ public class DesktopActivity extends Activity {
                 cell.addView(label);
             }
             Apps.Entry e = shown.get(i);
-            ((ImageView) cell.getChildAt(0)).setImageDrawable(e.icon);
+            ImageView image = (ImageView) cell.getChildAt(0);
+            ViewGroup.LayoutParams imageParams = image.getLayoutParams();
+            imageParams.width = dp(iconSizeDp);
+            imageParams.height = dp(iconSizeDp);
+            image.setLayoutParams(imageParams);
+            image.setImageDrawable(e.icon);
             ((TextView) cell.getChildAt(1)).setText(e.label);
             return cell;
         }
