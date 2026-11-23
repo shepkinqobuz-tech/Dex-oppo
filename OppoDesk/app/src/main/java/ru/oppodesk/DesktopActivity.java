@@ -229,9 +229,20 @@ public class DesktopActivity extends Activity {
             options.setLaunchDisplayId(s.displayId());
             startActivity(launch, options.toBundle());
             if (Sh.ready()) Apps.ensureOnDisplay(e, s.displayId());
+        } catch (SecurityException denied) {
+            // ColorOS 17 denies explicit launchDisplayId for third-party apps.
+            // Restore the previously working shell launch followed by task relocation.
+            if (Sh.ready()) {
+                s.lastError = "";
+                Apps.launch(e, s.displayId());
+            } else {
+                s.lastError = "Запуск на мониторе запрещён, Shizuku недоступен: " + denied;
+                Toast.makeText(this, "Для запуска на мониторе нужен Shizuku",
+                        Toast.LENGTH_LONG).show();
+            }
         } catch (Exception ex) {
             s.lastError = "Не удалось открыть приложение на мониторе: " + ex;
-            Toast.makeText(this, "ColorOS запретила запуск на мониторе", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Ошибка запуска приложения", Toast.LENGTH_LONG).show();
         }
     }
 
