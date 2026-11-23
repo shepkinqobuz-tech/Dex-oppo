@@ -126,7 +126,7 @@ final class Apps {
     private static void saveRecent(Context ctx) {
         StringBuilder saved = new StringBuilder();
         for (Entry entry : recent) {
-            if (saved.length() > 0) saved.append('\\n');
+            if (saved.length() > 0) saved.append('\n');
             saved.append(key(entry));
         }
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
