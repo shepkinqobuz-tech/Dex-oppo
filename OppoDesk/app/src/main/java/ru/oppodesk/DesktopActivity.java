@@ -42,6 +42,7 @@ public class DesktopActivity extends Activity {
     }
 
     private static DesktopActivity current;
+    private static Apps.Entry pendingTaskbarLaunch;
     private boolean built;
     private String query = "";
     private GridView appGrid;
@@ -135,6 +136,34 @@ public class DesktopActivity extends Activity {
         all.clear();
         all.addAll(Apps.load(this));
         filter(query);
+        if (pendingTaskbarLaunch != null) {
+            final Apps.Entry pending = pendingTaskbarLaunch;
+            pendingTaskbarLaunch = null;
+            // Wait for this activity to become the foreground activity on the monitor.
+            getWindow().getDecorView().postDelayed(() -> {
+                if (!isFinishing() && getDisplay().getDisplayId() != Display.DEFAULT_DISPLAY) {
+                    open(pending);
+                }
+            }, 200);
+        }
+    }
+
+    /** Taskbar requests must be handled by the foreground desktop activity. */
+    static void requestTaskbarLaunch(Apps.Entry entry) {
+        DeskService service = DeskService.instance;
+        if (service == null || !service.hasDisplay()) return;
+        pendingTaskbarLaunch = entry;
+        service.showDesktop();
+        DesktopActivity activity = current;
+        if (activity != null && activity.hasWindowFocus()
+                && activity.getDisplay().getDisplayId() != Display.DEFAULT_DISPLAY) {
+            activity.getWindow().getDecorView().post(() -> {
+                if (pendingTaskbarLaunch == entry && activity.hasWindowFocus()) {
+                    pendingTaskbarLaunch = null;
+                    activity.open(entry);
+                }
+            });
+        }
     }
 
     private void filter(String q) {
@@ -201,7 +230,8 @@ public class DesktopActivity extends Activity {
             startActivity(launch, options.toBundle());
             if (Sh.ready()) Apps.ensureOnDisplay(e, s.displayId());
         } catch (Exception ex) {
-            s.launch(e);
+            s.lastError = "Не удалось открыть приложение на мониторе: " + ex;
+            Toast.makeText(this, "ColorOS запретила запуск на мониторе", Toast.LENGTH_LONG).show();
         }
     }
 
