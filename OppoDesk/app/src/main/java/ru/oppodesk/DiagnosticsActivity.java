@@ -19,7 +19,7 @@ import android.widget.Toast;
 import java.text.DateFormat;
 import java.util.Date;
 
-/** Read-only diagnostics: never executes shell commands or changes device settings. */
+/** Read-only diagnostics, including an opt-in read-only Shizuku task snapshot. */
 public final class DiagnosticsActivity extends Activity {
     private TextView output;
     private String report = "";
@@ -38,6 +38,18 @@ public final class DiagnosticsActivity extends Activity {
         reload.setText("Обновить диагностику");
         reload.setOnClickListener(v -> refresh());
         root.addView(reload);
+        Button tasks = new Button(this);
+        tasks.setText("Снять состояние задач Android (только чтение)");
+        tasks.setOnClickListener(v -> {
+            if (!Sh.ready()) {
+                Toast.makeText(this, "Shizuku не готов", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Sh.run("dumpsys activity activities | grep -E 'RootTask|Task\\{|displayId=|mResumedActivity|topResumedActivity' | head -n 45");
+            Toast.makeText(this, "Подождите 2 секунды и нажмите «Обновить диагностику»",
+                    Toast.LENGTH_LONG).show();
+        });
+        root.addView(tasks);
         Button copy = new Button(this);
         copy.setText("Скопировать отчёт");
         copy.setOnClickListener(v -> {

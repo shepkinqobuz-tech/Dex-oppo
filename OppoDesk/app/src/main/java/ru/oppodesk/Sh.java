@@ -56,7 +56,7 @@ final class Sh {
                         new InputStreamReader(p.getInputStream()))) {
                     String line;
                     while ((line = r.readLine()) != null) {
-                        if (out.length() < 400) out.append(line).append('\n');
+                        if (out.length() < 6000) out.append(line).append('\n');
                     }
                 }
                 int exitCode = p.waitFor();
