@@ -2,7 +2,6 @@ package ru.oppodesk;
 
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -133,7 +132,7 @@ final class Apps {
                 .edit().putString(KEY_RECENT, saved.toString()).apply();
     }
 
-    private static void remember(Entry e) {
+    static void remember(Entry e) {
         for (int k = recent.size() - 1; k >= 0; k--) {
             if (recent.get(k).component.equals(e.component)) recent.remove(k);
         }

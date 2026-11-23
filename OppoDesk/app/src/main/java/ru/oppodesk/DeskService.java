@@ -1,6 +1,7 @@
 package ru.oppodesk;
 
 import android.accessibilityservice.AccessibilityService;
+import android.app.ActivityOptions;
 import android.accessibilityservice.GestureDescription;
 import android.content.Context;
 import android.content.Intent;
@@ -251,14 +252,30 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         }
     }
 
+    /** Launch taskbar shortcuts directly on the external display.
+     * Never fall back to a display-unspecified shell launch: that moves apps to the phone.
+     */
     void launch(Apps.Entry e) {
-        if (!hasDisplay()) return;
-        if (!Sh.ready()) {
-            lastError = "Shizuku не запущен или не дал разрешение — приложения открыть нельзя";
+        if (!hasDisplay()) {
+            lastError = "Внешний монитор не подключён";
             return;
         }
-        lastError = "";
-        Apps.launch(e, displayId);
+        try {
+            Intent launch = new Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_LAUNCHER)
+                    .setComponent(e.component)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(displayId);
+            // The overlay belongs to the external display; launch from its context.
+            Context context = winCtx != null ? winCtx : this;
+            context.startActivity(launch, options.toBundle());
+            lastError = "";
+            Apps.remember(e);
+        } catch (Exception ex) {
+            lastError = "Не удалось переключить приложение на мониторе: " + ex;
+        }
     }
 
     /** Рабочий стол открывается на телефоне и сам переносит себя на монитор. */
