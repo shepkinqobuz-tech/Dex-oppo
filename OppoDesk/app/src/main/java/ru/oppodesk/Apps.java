@@ -2,6 +2,7 @@ package ru.oppodesk;
 
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -27,6 +28,7 @@ final class Apps {
     static final String PREFS = "desk";
     static final String KEY_DPI = "dpi";
     static final String KEY_ICON_SIZE = "icon_size";
+    static final String KEY_RECENT = "recent_components";
     static final String KEY_APPS = "apps";
     /** Плотность монитора по умолчанию: 213 dpi даёт на Full HD экран 1440×810 dp. */
     static final int DEFAULT_DPI = 213;
@@ -95,6 +97,42 @@ final class Apps {
         remember(e);
     }
 
+    /** Restore launcher shortcuts, not a claim that Android tasks are still running. */
+    static void restoreRecent(Context ctx) {
+        recent.clear();
+        String saved = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_RECENT, "");
+        if (saved.isEmpty()) return;
+        List<Entry> installed = load(ctx);
+        for (String key : saved.split("\\n")) {
+            for (Entry entry : installed) {
+                if (key.equals(key(entry))) {
+                    recent.add(entry);
+                    break;
+                }
+            }
+            if (recent.size() >= 8) break;
+        }
+    }
+
+    static void clearRecent(Context ctx) {
+        recent.clear();
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().remove(KEY_RECENT).apply();
+        DeskService service = DeskService.instance;
+        if (service != null) service.refreshRecent();
+    }
+
+    private static void saveRecent(Context ctx) {
+        StringBuilder saved = new StringBuilder();
+        for (Entry entry : recent) {
+            if (saved.length() > 0) saved.append('\\n');
+            saved.append(key(entry));
+        }
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_RECENT, saved.toString()).apply();
+    }
+
     private static void remember(Entry e) {
         for (int k = recent.size() - 1; k >= 0; k--) {
             if (recent.get(k).component.equals(e.component)) recent.remove(k);
@@ -102,6 +140,9 @@ final class Apps {
         recent.add(0, e);
         while (recent.size() > 8) recent.remove(recent.size() - 1);
         DeskService s = DeskService.instance;
-        if (s != null) s.refreshRecent();
+        if (s != null) {
+            saveRecent(s);
+            s.refreshRecent();
+        }
     }
 }

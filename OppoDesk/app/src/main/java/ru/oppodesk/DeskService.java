@@ -22,6 +22,7 @@ import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.TextClock;
 import android.widget.TextView;
 
@@ -48,6 +49,7 @@ public class DeskService extends AccessibilityService implements DisplayManager.
     @Override
     protected void onServiceConnected() {
         instance = this;
+        Apps.restoreRecent(this);
         dm = getSystemService(DisplayManager.class);
         dm.registerDisplayListener(this, handler);
         attach();
@@ -191,8 +193,16 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         recentBox = new LinearLayout(winCtx);
         recentBox.setOrientation(LinearLayout.HORIZONTAL);
         recentBox.setGravity(Gravity.CENTER_VERTICAL);
-        bar.addView(recentBox, new LinearLayout.LayoutParams(0,
+        HorizontalScrollView recentScroll = new HorizontalScrollView(winCtx);
+        recentScroll.setHorizontalScrollBarEnabled(false);
+        recentScroll.setFillViewport(false);
+        recentScroll.addView(recentBox);
+        bar.addView(recentScroll, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+
+        TextView clear = barButton("Очистить", v -> Apps.clearRecent(this));
+        clear.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
+        bar.addView(clear);
 
         TextClock clock = new TextClock(winCtx);
         clock.setFormat24Hour("HH:mm   dd.MM");
@@ -216,13 +226,28 @@ public class DeskService extends AccessibilityService implements DisplayManager.
     void refreshRecent() {
         if (recentBox == null) return;
         recentBox.removeAllViews();
-        int size = dp(34), pad = dp(7);
+        int size = dp(30), pad = dp(5);
         for (final Apps.Entry e : Apps.recent) {
+            LinearLayout shortcut = new LinearLayout(winCtx);
+            shortcut.setOrientation(LinearLayout.VERTICAL);
+            shortcut.setGravity(Gravity.CENTER);
+            shortcut.setPadding(dp(5), dp(2), dp(5), dp(2));
             ImageView iv = new ImageView(winCtx);
             iv.setImageDrawable(e.icon);
-            iv.setPadding(pad, pad, pad, pad);
-            iv.setOnClickListener(v -> launch(e));
-            recentBox.addView(iv, new LinearLayout.LayoutParams(size + pad * 2, size + pad * 2));
+            iv.setContentDescription("Переключиться: " + e.label);
+            shortcut.addView(iv, new LinearLayout.LayoutParams(size, size));
+            TextView name = new TextView(winCtx);
+            name.setText(e.label);
+            name.setSingleLine(true);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            name.setMaxWidth(dp(100));
+            name.setTextColor(Color.WHITE);
+            name.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 10);
+            name.setGravity(Gravity.CENTER);
+            shortcut.addView(name);
+            shortcut.setOnClickListener(v -> launch(e));
+            recentBox.addView(shortcut, new LinearLayout.LayoutParams(
+                    dp(110), LinearLayout.LayoutParams.MATCH_PARENT));
         }
     }
 
