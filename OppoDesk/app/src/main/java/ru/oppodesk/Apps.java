@@ -96,6 +96,20 @@ final class Apps {
         remember(e);
     }
 
+    /** Focus only an existing task on the requested display; never start it on the phone. */
+    static void focusExisting(Entry e, int displayId) {
+        String pkg = e.component.getPackageName();
+        String script = "t=$(am stack list | awk -v d=" + displayId
+                + " -v p='" + pkg + "' '"
+                + "/^RootTask id=/ {ok=0; for(i=1;i<=NF;i++) if($i==\"displayId=\" d) ok=1} "
+                + "ok && $1 ~ /^taskId=[0-9]+:$/ && index($2,p \"/\")==1 "
+                + "{sub(/^taskId=/,\"\",$1); sub(/:$/,\"\",$1); print $1; exit}' );"
+                + " if [ -z \"$t\" ]; then echo 'NOTASK on external display: " + pkg + "'; exit 1; fi;"
+                + " echo \"Focus task $t on display " + displayId + "\";"
+                + " am task focus \"$t\"";
+        Sh.run(script);
+    }
+
     /** Restore launcher shortcuts, not a claim that Android tasks are still running. */
     static void restoreRecent(Context ctx) {
         recent.clear();

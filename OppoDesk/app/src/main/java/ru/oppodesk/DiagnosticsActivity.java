@@ -45,7 +45,7 @@ public final class DiagnosticsActivity extends Activity {
                 Toast.makeText(this, "Shizuku не готов", Toast.LENGTH_SHORT).show();
                 return;
             }
-            Sh.run("dumpsys activity activities | grep -E 'RootTask|Task\\{|displayId=|mResumedActivity|topResumedActivity' | head -n 45");
+            Sh.run("dumpsys activity activities | grep -E 'RootTask|Task\\{|displayId=|mResumedActivity|topResumedActivity' | head -n 100");
             Toast.makeText(this, "Подождите 2 секунды и нажмите «Обновить диагностику»",
                     Toast.LENGTH_LONG).show();
         });
@@ -77,7 +77,7 @@ public final class DiagnosticsActivity extends Activity {
     }
     private void refresh() {
         StringBuilder s = new StringBuilder();
-        s.append("OppoDesk 0.9-dev2 | Только чтение\n");
+        s.append("OppoDesk 0.9-dev10 | Только чтение\n");
         s.append("Дата: ").append(DateFormat.getDateTimeInstance().format(new Date())).append("\n\n");
         s.append("УСТРОЙСТВО\n");
         s.append("Производитель: ").append(Build.MANUFACTURER).append("\n");

@@ -258,10 +258,9 @@ public class DeskService extends AccessibilityService implements DisplayManager.
             return;
         }
         lastError = "";
-        // Use the same launch-and-move path as the working desktop fallback.
-        // Direct display-targeted starts are denied by ColorOS 17.
+        // Focus existing external tasks only; desktop launches remain unchanged.
         if (Sh.ready()) {
-            Apps.launch(e, displayId);
+            Apps.focusExisting(e, displayId);
         } else {
             lastError = "Shizuku не готов: переключение на монитор недоступно";
         }
