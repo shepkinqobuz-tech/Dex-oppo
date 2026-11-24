@@ -52,12 +52,12 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         Apps.restoreRecent(this);
         dm = getSystemService(DisplayManager.class);
         dm.registerDisplayListener(this, handler);
-        attach();
+        attach("service.connected");
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
-        detach();
+        detach("service.unbind");
         if (dm != null) dm.unregisterDisplayListener(this);
         instance = null;
         return super.onUnbind(intent);
@@ -66,25 +66,32 @@ public class DeskService extends AccessibilityService implements DisplayManager.
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {}
     @Override public void onInterrupt() {}
 
-    @Override public void onDisplayAdded(int id) { attach(); }
+    @Override public void onDisplayAdded(int id) {
+        TaskTrace.event("display.added id=" + id, displayId);
+        attach("display.added");
+    }
     @Override public void onDisplayChanged(int id) {
         if (!hasDisplay()) {
-            attach();
+            attach("display.changed id=" + id);
             return;
         }
         if (id != displayId) return;
         Display d = dm.getDisplay(id);
         if (d == null) return;
+        TaskTrace.event("display.changed id=" + id + " state=" + d.getState(), displayId);
         DisplayMetrics m = new DisplayMetrics();
         d.getRealMetrics(m);
         if (m.densityDpi != dpi || m.widthPixels != width || m.heightPixels != height) {
             // Размер или плотность экрана изменились — панель и курсор надо построить заново.
-            detach();
-            attach();
+            String change = "display.changed " + width + "x" + height + "@" + dpi
+                    + " -> " + m.widthPixels + "x" + m.heightPixels + "@" + m.densityDpi;
+            detach(change);
+            attach(change);
         }
     }
     @Override public void onDisplayRemoved(int id) {
-        if (id == displayId) detach();
+        TaskTrace.event("display.removed id=" + id, displayId);
+        if (id == displayId) detach("display.removed");
     }
 
     boolean hasDisplay() { return displayId != Display.INVALID_DISPLAY; }
@@ -118,10 +125,11 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         }
     }
 
-    void attach() {
+    void attach(String source) {
         if (hasDisplay()) return;
         Display d = findExternal(dm);
         if (d == null) return;
+        TaskTrace.event("attach.begin " + source, d.getDisplayId());
         StringBuilder errors = new StringBuilder();
         for (int n = 0; n < 3; n++) {
             try {
@@ -139,9 +147,11 @@ public class DeskService extends AccessibilityService implements DisplayManager.
                 addBar();
                 addCursor();
                 displayId = d.getDisplayId();
+                TaskTrace.event("attach.ready " + source + " " + width + "x" + height + "@" + dpi,
+                        displayId);
                 lastError = "";
                 applyScale();
-                showDesktop();
+                showDesktop("attach " + source);
                 return;
             } catch (Throwable e) {
                 errors.append("\n[").append(n).append("] ").append(e);
@@ -149,10 +159,11 @@ public class DeskService extends AccessibilityService implements DisplayManager.
             }
         }
         lastError = "Не удалось вывести панель на монитор:" + errors;
+        TaskTrace.event("attach.failed " + source, d.getDisplayId());
     }
 
     private void cleanup() {
-        closeStartMenu();
+        closeStartMenu("detach");
         if (wm != null) {
             try { if (bar != null) wm.removeView(bar); } catch (Exception ignored) {}
             try { if (cursor != null) wm.removeView(cursor); } catch (Exception ignored) {}
@@ -163,7 +174,8 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         wm = null;
     }
 
-    private void detach() {
+    private void detach(String source) {
+        TaskTrace.event("detach " + source, displayId);
         cleanup();
         displayId = Display.INVALID_DISPLAY;
     }
@@ -188,7 +200,7 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         bar.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams full = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
-        bar.addView(barButton("▦  Пуск", v -> toggleStartMenu()), full);
+        bar.addView(barButton("▦  Пуск", v -> toggleStartMenu("monitor")), full);
         bar.addView(barButton("◀", v -> back()), full);
 
         recentBox = new LinearLayout(winCtx);
@@ -252,7 +264,7 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         }
     }
 
-    /** Route taskbar switching through the monitor's foreground desktop activity. */
+    /** Переключает только существующую задачу на мониторе. */
     void launch(Apps.Entry e) {
         if (!hasDisplay()) {
             lastError = "Внешний монитор не подключён";
@@ -267,22 +279,45 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         }
     }
 
-    void closeStartMenu() {
-        if (startMenu != null && wm != null) {
-            try { wm.removeView(startMenu); } catch (Exception ignored) {}
+    private boolean closeStartMenu(String source) {
+        if (startMenu == null) return false;
+        boolean removed = false;
+        if (wm != null) {
+            try {
+                wm.removeView(startMenu);
+                removed = true;
+            } catch (Exception ex) {
+                TaskTrace.event("start.remove failed " + ex.getClass().getSimpleName(), displayId);
+            }
         }
         startMenu = null;
+        TaskTrace.event("start.close " + source + " removed=" + removed, displayId);
+        return removed;
     }
 
-    void toggleStartMenu() {
+    private void menuCheckpoint(String label) {
+        TaskTrace.Session trace = TaskTrace.active();
+        if (trace == null) return;
+        int target = displayId;
+        TaskTrace.event(label, target);
+        handler.postDelayed(() -> trace.after(label, target), 350);
+    }
+
+    void toggleStartMenu(String source) {
+        TaskTrace.event("start.toggle " + source, displayId);
         if (!hasDisplay() || wm == null) return;
-        if (startMenu != null) { closeStartMenu(); return; }
+        if (startMenu != null) {
+            if (closeStartMenu(source)) menuCheckpoint("после закрытия Пуска " + source);
+            return;
+        }
         try {
             LinearLayout menu = new LinearLayout(winCtx);
             menu.setOrientation(LinearLayout.VERTICAL);
             menu.setPadding(dp(12), dp(8), dp(12), dp(8));
             menu.setBackgroundColor(0xFF202630);
-            menu.addView(barButton("Приложения   ·   Закрыть ×", v -> closeStartMenu()),
+            menu.addView(barButton("Приложения   ·   Закрыть ×", v -> {
+                if (closeStartMenu("button")) menuCheckpoint("после закрытия Пуска button");
+            }),
                     new LinearLayout.LayoutParams(-1, dp(44)));
             android.widget.ScrollView scroll = new android.widget.ScrollView(winCtx);
             LinearLayout list = new LinearLayout(winCtx);
@@ -291,9 +326,14 @@ public class DeskService extends AccessibilityService implements DisplayManager.
             for (Apps.Entry e : Apps.load(this)) {
                 if (!selected.isEmpty() && !selected.contains(Apps.key(e))) continue;
                 TextView item = barButton(e.label, v -> {
-                    closeStartMenu();
-                    if (hasDisplay() && Sh.ready()) Apps.launch(e, displayId);
-                    else lastError = "Shizuku не готов или монитор отключён";
+                    TaskTrace.event("start.select " + Apps.key(e), displayId);
+                    closeStartMenu("selection");
+                    if (hasDisplay() && Sh.ready()) {
+                        Apps.launch(e, displayId, "start " + source);
+                    } else {
+                        lastError = "Shizuku не готов или монитор отключён";
+                        TaskTrace.event("start.launch skipped " + lastError, displayId);
+                    }
                 });
                 item.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
                 item.setCompoundDrawablesWithIntrinsicBounds(e.icon, null, null, null);
@@ -312,18 +352,23 @@ public class DeskService extends AccessibilityService implements DisplayManager.
             lp.y = barHeight;
             wm.addView(menu, lp);
             startMenu = menu;
+            TaskTrace.event("start.overlay added", displayId);
             if (bar != null) bar.setVisibility(View.VISIBLE);
             // Keep the cursor above the newly added menu.
             if (cursor != null) { wm.removeView(cursor); cursor = null; addCursor(); }
+            menuCheckpoint("после открытия Пуска " + source);
         } catch (Exception ex) {
-            closeStartMenu();
+            closeStartMenu("error");
             lastError = "Ошибка меню Пуск: " + ex;
+            TaskTrace.event("start.failed " + ex.getClass().getSimpleName(), displayId);
+            menuCheckpoint("после ошибки Пуска " + source);
         }
     }
 
     /** Рабочий стол открывается на телефоне и сам переносит себя на монитор. */
-    void showDesktop() {
+    void showDesktop(String source) {
         if (!hasDisplay()) return;
+        TaskTrace.event("desktop.show " + source, displayId);
         Intent i = new Intent(this, DesktopActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                         | Intent.FLAG_ACTIVITY_NO_ANIMATION);
@@ -348,7 +393,8 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         if (!hasDisplay() || !Sh.ready()) return;
         int value = getSharedPreferences(Apps.PREFS, MODE_PRIVATE)
                 .getInt(Apps.KEY_DPI, Apps.DEFAULT_DPI);
-        if (value != dpi) Sh.run("wm density " + value + " -d " + displayId);
+        if (value != dpi) Sh.run("attach.density", displayId,
+                "wm density " + value + " -d " + displayId);
     }
 
     void back() {

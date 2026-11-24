@@ -120,7 +120,10 @@ public class MainActivity extends Activity {
         back.setOnClickListener(v -> { DeskService s = DeskService.instance; if (s != null) s.back(); });
         Button home = new Button(this);
         home.setText("▦ Пуск");
-        home.setOnClickListener(v -> { DeskService s = DeskService.instance; if (s != null) s.toggleStartMenu(); });
+        home.setOnClickListener(v -> {
+            DeskService s = DeskService.instance;
+            if (s != null) s.toggleStartMenu("phone");
+        });
         LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         row.addView(back, half);
@@ -250,10 +253,10 @@ public class MainActivity extends Activity {
         if (s == null) {
             error = "Сначала включите службу OppoDesk";
         } else {
-            s.attach();
+            s.attach("phone.desktop");
             if (s.hasDisplay()) {
                 s.applyScale();
-                s.showDesktop();
+                s.showDesktop("phone.desktop");
             }
         }
         refresh();

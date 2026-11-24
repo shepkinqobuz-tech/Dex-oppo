@@ -66,15 +66,18 @@ final class Apps {
     }
 
     /** Ждёт появления окна приложения и переносит его на экран displayId, если оно не там. */
-    static String mover(String pkg, int displayId) {
+    private static String mover(String pkg, int displayId, boolean trace) {
         return " r=; t=; for i in 1 2 3 4 5 6 7 8 9 10 11 12; do"
                 + " r=$(am stack list | grep -E '^RootTask id=|taskId=[0-9]*: " + pkg + "/'"
                 + " | grep -B1 -m1 'taskId=[0-9]*: " + pkg + "/');"
                 + " t=$(echo \"$r\" | sed -n 's/.*taskId=\\([0-9]*\\):.*/\\1/p' | head -n 1);"
                 + " [ -n \"$t\" ] && break; sleep 0.25; done;"
                 + " if [ -z \"$t\" ]; then echo NOTASK " + pkg + ";"
-                + " else case \"$r \" in *displayId=" + displayId + "[!0-9]*) ;;"
-                + " *) am display move-stack $t " + displayId + " ;; esac; fi";
+                + " else " + (trace ? "printf 'Selected taskId=%s\\n' \"$t\"; " : "")
+                + "case \"$r \" in *displayId=" + displayId + "[!0-9]*) "
+                + (trace ? "echo 'Already on target display';" : "") + " ;;"
+                + " *) " + (trace ? "echo \"am display move-stack $t " + displayId + "\"; " : "")
+                + "am display move-stack $t " + displayId + " ;; esac; fi";
     }
 
     /**
@@ -82,17 +85,20 @@ final class Apps {
      * приложение открывается обычным образом, после чего его окно переносится
      * на экран displayId командой оболочки.
      */
-    static void launch(Entry e, int displayId) {
+    static void launch(Entry e, int displayId, String source) {
         String pkg = e.component.getPackageName();
         String cmp = pkg + "/" + e.component.getClassName();
-        Sh.run("am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
-                + " -f 0x10200000 -n '" + cmp + "' >/dev/null;" + mover(pkg, displayId));
+        String start = "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
+                + " -f 0x10200000 -n '" + cmp + "'";
+        Sh.launchAndMove(source, displayId, start, mover(pkg, displayId, false),
+                mover(pkg, displayId, true));
         remember(e);
     }
 
     /** Приложение уже запущено обычным способом — только проверить, что оно на мониторе. */
     static void ensureOnDisplay(Entry e, int displayId) {
-        Sh.run(mover(e.component.getPackageName(), displayId));
+        String pkg = e.component.getPackageName();
+        Sh.run("move desktop " + pkg, displayId, mover(pkg, displayId, TaskTrace.active() != null));
         remember(e);
     }
 
@@ -107,7 +113,7 @@ final class Apps {
                 + " if [ -z \"$t\" ]; then echo 'NOTASK on external display: " + pkg + "'; exit 1; fi;"
                 + " echo \"Focus task $t on display " + displayId + "\";"
                 + " am task focus \"$t\"";
-        Sh.run(script);
+        Sh.run("focus " + pkg, displayId, script);
     }
 
     /** Restore launcher shortcuts, not a claim that Android tasks are still running. */

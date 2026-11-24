@@ -22,6 +22,7 @@ import java.util.Date;
 /** Read-only diagnostics, including an opt-in read-only Shizuku task snapshot. */
 public final class DiagnosticsActivity extends Activity {
     private TextView output;
+    private Button recording;
     private String report = "";
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -38,6 +39,18 @@ public final class DiagnosticsActivity extends Activity {
         reload.setText("Обновить диагностику");
         reload.setOnClickListener(v -> refresh());
         root.addView(reload);
+        recording = new Button(this);
+        recording.setOnClickListener(v -> {
+            if (TaskTrace.active() != null) {
+                TaskTrace.stop(targetDisplayId());
+            } else if (Sh.ready()) {
+                TaskTrace.start(targetDisplayId());
+            } else {
+                Toast.makeText(this, "Shizuku не готов", Toast.LENGTH_SHORT).show();
+            }
+            refresh();
+        });
+        root.addView(recording);
         Button tasks = new Button(this);
         tasks.setText("Снять состояние задач Android (только чтение)");
         tasks.setOnClickListener(v -> {
@@ -45,14 +58,16 @@ public final class DiagnosticsActivity extends Activity {
                 Toast.makeText(this, "Shizuku не готов", Toast.LENGTH_SHORT).show();
                 return;
             }
-            Sh.run("dumpsys activity activities | grep -E 'RootTask|Task\\{|displayId=|mResumedActivity|topResumedActivity' | head -n 100");
-            Toast.makeText(this, "Подождите 2 секунды и нажмите «Обновить диагностику»",
-                    Toast.LENGTH_LONG).show();
+            TaskTrace.manualSnapshot(targetDisplayId(), () -> runOnUiThread(() -> {
+                if (!isFinishing() && !isDestroyed()) refresh();
+            }));
+            refresh();
         });
         root.addView(tasks);
         Button copy = new Button(this);
         copy.setText("Скопировать отчёт");
         copy.setOnClickListener(v -> {
+            refresh();
             ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             if (cb != null) {
                 cb.setPrimaryClip(ClipData.newPlainText("OppoDesk diagnostics", report));
@@ -75,9 +90,25 @@ public final class DiagnosticsActivity extends Activity {
         super.onResume();
         if (output != null) refresh();
     }
+
+    private int targetDisplayId() {
+        DeskService service = DeskService.instance;
+        if (service != null && service.hasDisplay()) return service.displayId();
+        Display external = DeskService.findExternal(getSystemService(DisplayManager.class));
+        return external == null ? Display.INVALID_DISPLAY : external.getDisplayId();
+    }
+
     private void refresh() {
+        recording.setText(TaskTrace.active() == null
+                ? "Начать запись сценария" : "Остановить запись сценария");
         StringBuilder s = new StringBuilder();
-        s.append("OppoDesk 0.9-dev11 | Только чтение\n");
+        s.append("OppoDesk");
+        try {
+            var version = getPackageManager().getPackageInfo(getPackageName(), 0);
+            s.append(" ").append(version.versionName).append(" (")
+                    .append(version.getLongVersionCode()).append(")");
+        } catch (PackageManager.NameNotFoundException ignored) {}
+        s.append(" | Диагностика\n");
         s.append("Дата: ").append(DateFormat.getDateTimeInstance().format(new Date())).append("\n\n");
         s.append("УСТРОЙСТВО\n");
         s.append("Производитель: ").append(Build.MANUFACTURER).append("\n");
@@ -131,6 +162,8 @@ public final class DiagnosticsActivity extends Activity {
                     Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1);
         } catch (SecurityException e) { s.append("нет доступа"); }
         s.append("\n\nСистемные признаки не гарантируют поддержку окон ColorOS.\n");
+        String trace = TaskTrace.report();
+        if (!trace.isEmpty()) s.append("\nЗАПИСЬ СЦЕНАРИЯ\n").append(trace).append('\n');
         report = s.toString();
         output.setText(report);
     }

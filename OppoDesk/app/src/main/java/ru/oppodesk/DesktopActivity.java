@@ -116,6 +116,7 @@ public class DesktopActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        traceLifecycle("resume");
         Display ext = DeskService.findExternal(getSystemService(DisplayManager.class));
         if (ext == null) {
             finish();
@@ -128,7 +129,8 @@ public class DesktopActivity extends Activity {
                 finish();
                 return;
             }
-            Sh.run("am display move-stack " + getTaskId() + " " + ext.getDisplayId());
+            Sh.run("move desktop.self", ext.getDisplayId(),
+                    "am display move-stack " + getTaskId() + " " + ext.getDisplayId());
             return;
         }
         if (!built) buildUi();
@@ -153,7 +155,7 @@ public class DesktopActivity extends Activity {
         DeskService service = DeskService.instance;
         if (service == null || !service.hasDisplay()) return;
         pendingTaskbarLaunch = entry;
-        service.showDesktop();
+        service.showDesktop("pendingTaskbarLaunch");
         DesktopActivity activity = current;
         if (activity != null && activity.hasWindowFocus()
                 && activity.getDisplay().getDisplayId() != Display.DEFAULT_DISPLAY) {
@@ -203,9 +205,35 @@ public class DesktopActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        traceLifecycle("pause");
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        traceLifecycle("stop");
+        super.onStop();
+    }
+
+    @Override
     protected void onDestroy() {
+        traceLifecycle("destroy");
         if (current == this) current = null;
         super.onDestroy();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        traceLifecycle("focus=" + hasFocus);
+    }
+
+    private void traceLifecycle(String event) {
+        if (TaskTrace.active() == null) return;
+        Display display = getDisplay();
+        TaskTrace.event("desktop." + event + " taskId=" + getTaskId(),
+                display == null ? Display.INVALID_DISPLAY : display.getDisplayId());
     }
 
     private void open(Apps.Entry e) {
@@ -227,20 +255,24 @@ public class DesktopActivity extends Activity {
             // ColorOS may ignore this hint; the existing Shizuku fallback remains.
             ActivityOptions options = ActivityOptions.makeBasic();
             options.setLaunchDisplayId(s.displayId());
+            TaskTrace.event("launch desktop.options " + Apps.key(e), s.displayId());
             startActivity(launch, options.toBundle());
             if (Sh.ready()) Apps.ensureOnDisplay(e, s.displayId());
         } catch (SecurityException denied) {
+            TaskTrace.event("launch desktop.options denied SecurityException", s.displayId());
             // ColorOS 17 denies explicit launchDisplayId for third-party apps.
             // Restore the previously working shell launch followed by task relocation.
             if (Sh.ready()) {
                 s.lastError = "";
-                Apps.launch(e, s.displayId());
+                Apps.launch(e, s.displayId(), "desktop fallback");
             } else {
                 s.lastError = "Запуск на мониторе запрещён, Shizuku недоступен: " + denied;
                 Toast.makeText(this, "Для запуска на мониторе нужен Shizuku",
                         Toast.LENGTH_LONG).show();
             }
         } catch (Exception ex) {
+            TaskTrace.event("launch desktop.options failed " + ex.getClass().getSimpleName(),
+                    s.displayId());
             s.lastError = "Не удалось открыть приложение на мониторе: " + ex;
             Toast.makeText(this, "Ошибка запуска приложения", Toast.LENGTH_LONG).show();
         }
