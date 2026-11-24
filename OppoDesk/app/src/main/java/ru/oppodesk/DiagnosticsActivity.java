@@ -77,7 +77,7 @@ public final class DiagnosticsActivity extends Activity {
     }
     private void refresh() {
         StringBuilder s = new StringBuilder();
-        s.append("OppoDesk 0.9-dev10 | Только чтение\n");
+        s.append("OppoDesk 0.9-dev11 | Только чтение\n");
         s.append("Дата: ").append(DateFormat.getDateTimeInstance().format(new Date())).append("\n\n");
         s.append("УСТРОЙСТВО\n");
         s.append("Производитель: ").append(Build.MANUFACTURER).append("\n");

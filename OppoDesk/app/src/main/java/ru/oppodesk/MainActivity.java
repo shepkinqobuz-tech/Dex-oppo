@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         back.setOnClickListener(v -> { DeskService s = DeskService.instance; if (s != null) s.back(); });
         Button home = new Button(this);
         home.setText("▦ Пуск");
-        home.setOnClickListener(v -> startDesktop());
+        home.setOnClickListener(v -> { DeskService s = DeskService.instance; if (s != null) s.toggleStartMenu(); });
         LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         row.addView(back, half);

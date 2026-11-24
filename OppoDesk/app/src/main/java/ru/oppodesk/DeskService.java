@@ -42,7 +42,7 @@ public class DeskService extends AccessibilityService implements DisplayManager.
     private float x, y, density = 1f;
     private int dpi;
     private CursorView cursor;
-    private LinearLayout bar, recentBox;
+    private LinearLayout bar, recentBox, startMenu;
     private float scrollX, scrollY;
     private boolean gestureBusy;
 
@@ -152,6 +152,7 @@ public class DeskService extends AccessibilityService implements DisplayManager.
     }
 
     private void cleanup() {
+        closeStartMenu();
         if (wm != null) {
             try { if (bar != null) wm.removeView(bar); } catch (Exception ignored) {}
             try { if (cursor != null) wm.removeView(cursor); } catch (Exception ignored) {}
@@ -187,7 +188,7 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         bar.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams full = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT);
-        bar.addView(barButton("▦  Пуск", v -> showDesktop()), full);
+        bar.addView(barButton("▦  Пуск", v -> toggleStartMenu()), full);
         bar.addView(barButton("◀", v -> back()), full);
 
         recentBox = new LinearLayout(winCtx);
@@ -266,6 +267,60 @@ public class DeskService extends AccessibilityService implements DisplayManager.
         }
     }
 
+    void closeStartMenu() {
+        if (startMenu != null && wm != null) {
+            try { wm.removeView(startMenu); } catch (Exception ignored) {}
+        }
+        startMenu = null;
+    }
+
+    void toggleStartMenu() {
+        if (!hasDisplay() || wm == null) return;
+        if (startMenu != null) { closeStartMenu(); return; }
+        try {
+            LinearLayout menu = new LinearLayout(winCtx);
+            menu.setOrientation(LinearLayout.VERTICAL);
+            menu.setPadding(dp(12), dp(8), dp(12), dp(8));
+            menu.setBackgroundColor(0xFF202630);
+            menu.addView(barButton("Приложения   ·   Закрыть ×", v -> closeStartMenu()),
+                    new LinearLayout.LayoutParams(-1, dp(44)));
+            android.widget.ScrollView scroll = new android.widget.ScrollView(winCtx);
+            LinearLayout list = new LinearLayout(winCtx);
+            list.setOrientation(LinearLayout.VERTICAL);
+            java.util.Set<String> selected = Apps.selected(this);
+            for (Apps.Entry e : Apps.load(this)) {
+                if (!selected.isEmpty() && !selected.contains(Apps.key(e))) continue;
+                TextView item = barButton(e.label, v -> {
+                    closeStartMenu();
+                    if (hasDisplay() && Sh.ready()) Apps.launch(e, displayId);
+                    else lastError = "Shizuku не готов или монитор отключён";
+                });
+                item.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
+                item.setCompoundDrawablesWithIntrinsicBounds(e.icon, null, null, null);
+                item.setCompoundDrawablePadding(dp(10));
+                list.addView(item, new LinearLayout.LayoutParams(-1, dp(56)));
+            }
+            scroll.addView(list);
+            menu.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+            WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                    Math.min(dp(340), width), Math.min(dp(460), height - barHeight),
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                            | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT);
+            lp.gravity = Gravity.BOTTOM | Gravity.LEFT;
+            lp.y = barHeight;
+            wm.addView(menu, lp);
+            startMenu = menu;
+            if (bar != null) bar.setVisibility(View.VISIBLE);
+            // Keep the cursor above the newly added menu.
+            if (cursor != null) { wm.removeView(cursor); cursor = null; addCursor(); }
+        } catch (Exception ex) {
+            closeStartMenu();
+            lastError = "Ошибка меню Пуск: " + ex;
+        }
+    }
+
     /** Рабочий стол открывается на телефоне и сам переносит себя на монитор. */
     void showDesktop() {
         if (!hasDisplay()) return;
@@ -325,7 +380,7 @@ public class DeskService extends AccessibilityService implements DisplayManager.
             // Панель задач прячется, чтобы не закрывать низ приложений,
             // и появляется, когда курсор упирается в нижний край экрана.
             if (y >= height - 3) bar.setVisibility(View.VISIBLE);
-            else if (y < height - barHeight - dp(8)) bar.setVisibility(View.GONE);
+            else if (startMenu == null && y < height - barHeight - dp(8)) bar.setVisibility(View.GONE);
         }
     }
 
