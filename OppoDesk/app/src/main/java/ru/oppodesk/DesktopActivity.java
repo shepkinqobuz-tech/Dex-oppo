@@ -230,10 +230,12 @@ public class DesktopActivity extends Activity {
     }
 
     private void traceLifecycle(String event) {
-        if (TaskTrace.active() == null) return;
+        TaskTrace.Session trace = TaskTrace.active();
+        if (trace == null) return;
         Display display = getDisplay();
-        TaskTrace.event("desktop." + event + " taskId=" + getTaskId(),
+        trace.event("desktop." + event + " taskId=" + getTaskId(),
                 display == null ? Display.INVALID_DISPLAY : display.getDisplayId());
+        if (event.equals("resume") || event.startsWith("focus=")) trace.location("desktop." + event);
     }
 
     private void open(Apps.Entry e) {

@@ -1,5 +1,8 @@
 package ru.oppodesk;
 
+import android.os.Handler;
+import android.os.Looper;
+
 import java.util.ArrayDeque;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -11,7 +14,8 @@ import java.util.function.UnaryOperator;
 final class TaskTrace {
     private static final String STACK = "timeout 4s am stack list";
     private static final String ACTIVITIES = "timeout 6s dumpsys -t 4 activity activities";
-    private static final String HELP = "timeout 4s am help";
+    private static final String WINDOWS = "timeout 5s dumpsys -t 3 window windows";
+    private static final Handler timer = new Handler(Looper.getMainLooper());
     private static final int MAX_REPORT_CHARS = 120_000;
     private static final ThreadPoolExecutor snapshots = new ThreadPoolExecutor(
             1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(8),
@@ -31,11 +35,7 @@ final class TaskTrace {
         report = session;
         active = session;
         session.event("Запись начата", displayId);
-        session.enqueue("начало записи", displayId, () -> {
-            session.snapshot("начало записи", displayId);
-            session.command("справка устройства", displayId, HELP,
-                    Sh.capture(HELP, 32_000, UnaryOperator.identity()));
-        });
+        session.after("начало записи", displayId);
     }
 
     static void stop(int displayId) {
@@ -65,6 +65,33 @@ final class TaskTrace {
 
     static final class Session {
         private final ArrayDeque<String> entries = new ArrayDeque<>();
+        // Запуск приложения и события DesktopActivity приходят в основном потоке.
+        private String observedPackage;
+        private int observedDisplay;
+        private int launchNumber;
+
+        void watch(String pkg, int displayId) {
+            observedPackage = pkg;
+            observedDisplay = displayId;
+            int number = ++launchNumber;
+            for (int delay : new int[] {500, 2000, 6000, 12000, 16000}) {
+                timer.postDelayed(() -> {
+                    if (active == this && launchNumber == number) location("запуск +" + delay + " мс");
+                }, delay);
+            }
+        }
+
+        void location(String reason) {
+            String pkg = observedPackage;
+            if (pkg == null) return;
+            int displayId = observedDisplay;
+            String label = "Расположение " + pkg + " / " + reason;
+            enqueue(label, displayId, () -> {
+                taskCommand(label, displayId, STACK, 4000, LaunchLocation.tasks(pkg));
+                taskCommand(label, displayId, WINDOWS, 4000, LaunchLocation.windows(pkg));
+            });
+        }
+
         private int size;
         private boolean dropped;
 
@@ -102,10 +129,15 @@ final class TaskTrace {
         }
 
         private void taskCommand(String label, int displayId, String script, int limit) {
-            Sh.Result result = Sh.capture(script, limit, TaskSnapshot::project);
+            taskCommand(label, displayId, script, limit, TaskSnapshot::project);
+        }
+
+        private void taskCommand(String label, int displayId, String script, int limit,
+                                 UnaryOperator<String> filter) {
+            Sh.Result result = Sh.capture(script, limit, filter);
             if (result.exitCode() == 0 && result.stdout().isEmpty()) {
                 result = new Sh.Result(result.startedAt(), result.durationMs(), result.exitCode(),
-                        "[нет распознанных строк задач]", result.stderr());
+                        "[нет совпадающих распознанных строк]", result.stderr());
             }
             command(label, displayId, script, result);
         }

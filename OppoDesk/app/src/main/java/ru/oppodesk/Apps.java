@@ -87,6 +87,8 @@ final class Apps {
      */
     static void launch(Entry e, int displayId, String source) {
         String pkg = e.component.getPackageName();
+        TaskTrace.Session trace = TaskTrace.active();
+        if (trace != null) trace.watch(pkg, displayId);
         String cmp = pkg + "/" + e.component.getClassName();
         String start = "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
                 + " -f 0x10200000 -n '" + cmp + "'";
@@ -98,6 +100,8 @@ final class Apps {
     /** Приложение уже запущено обычным способом — только проверить, что оно на мониторе. */
     static void ensureOnDisplay(Entry e, int displayId) {
         String pkg = e.component.getPackageName();
+        TaskTrace.Session trace = TaskTrace.active();
+        if (trace != null) trace.watch(pkg, displayId);
         Sh.run("move desktop " + pkg, displayId, mover(pkg, displayId, TaskTrace.active() != null));
         remember(e);
     }
