@@ -65,21 +65,6 @@ final class Apps {
         return out;
     }
 
-    /** Ждёт появления окна приложения и переносит его на экран displayId, если оно не там. */
-    private static String mover(String pkg, int displayId, boolean trace) {
-        return " r=; t=; for i in 1 2 3 4 5 6 7 8 9 10 11 12; do"
-                + " r=$(am stack list | grep -E '^RootTask id=|taskId=[0-9]*: " + pkg + "/'"
-                + " | grep -B1 -m1 'taskId=[0-9]*: " + pkg + "/');"
-                + " t=$(echo \"$r\" | sed -n 's/.*taskId=\\([0-9]*\\):.*/\\1/p' | head -n 1);"
-                + " [ -n \"$t\" ] && break; sleep 0.25; done;"
-                + " if [ -z \"$t\" ]; then echo NOTASK " + pkg + ";"
-                + " else " + (trace ? "printf 'Selected taskId=%s\\n' \"$t\"; " : "")
-                + "case \"$r \" in *displayId=" + displayId + "[!0-9]*) "
-                + (trace ? "echo 'Already on target display';" : "") + " ;;"
-                + " *) " + (trace ? "echo \"am display move-stack $t " + displayId + "\"; " : "")
-                + "am display move-stack $t " + displayId + " ;; esac; fi";
-    }
-
     /**
      * Прошивка не даёт запускать приложения сразу на внешнем экране, поэтому
      * приложение открывается обычным образом, после чего его окно переносится
@@ -92,8 +77,8 @@ final class Apps {
         String cmp = pkg + "/" + e.component.getClassName();
         String start = "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
                 + " -f 0x10200000 -n '" + cmp + "'";
-        Sh.launchAndMove(source, displayId, start, mover(pkg, displayId, false),
-                mover(pkg, displayId, true));
+        Sh.launchAndMove(source, displayId, start, ExternalTaskCommands.move(
+                cmp, e.component.flattenToShortString(), displayId));
         remember(e);
     }
 
@@ -102,22 +87,16 @@ final class Apps {
         String pkg = e.component.getPackageName();
         TaskTrace.Session trace = TaskTrace.active();
         if (trace != null) trace.watch(pkg, displayId);
-        Sh.run("move desktop " + pkg, displayId, mover(pkg, displayId, TaskTrace.active() != null));
+        Sh.run("move desktop " + pkg, displayId, ExternalTaskCommands.move(
+                key(e), e.component.flattenToShortString(), displayId));
         remember(e);
     }
 
     /** Focus only an existing task on the requested display; never start it on the phone. */
     static void focusExisting(Entry e, int displayId) {
         String pkg = e.component.getPackageName();
-        String script = "t=$(am stack list | awk -v d=" + displayId
-                + " -v p='" + pkg + "' '"
-                + "/^RootTask id=/ {ok=0; for(i=1;i<=NF;i++) if($i==\"displayId=\" d) ok=1} "
-                + "ok && $1 ~ /^taskId=[0-9]+:$/ && index($2,p \"/\")==1 "
-                + "{sub(/^taskId=/,\"\",$1); sub(/:$/,\"\",$1); print $1; exit}' );"
-                + " if [ -z \"$t\" ]; then echo 'NOTASK on external display: " + pkg + "'; exit 1; fi;"
-                + " echo \"Focus task $t on display " + displayId + "\";"
-                + " am task focus \"$t\"";
-        Sh.run("focus " + pkg, displayId, script);
+        Sh.run("focus " + pkg, displayId, ExternalTaskCommands.focus(
+                key(e), e.component.flattenToShortString(), displayId));
     }
 
     /** Restore launcher shortcuts, not a claim that Android tasks are still running. */

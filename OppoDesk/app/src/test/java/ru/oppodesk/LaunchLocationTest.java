@@ -33,4 +33,29 @@ public class LaunchLocationTest {
         assertEquals("window " + PKG, filter.apply("  Window #2 Window{f u0 " + ALIAS + "}:"));
         assertEquals(" mDisplayId=326", filter.apply("    mDisplayId=326"));
     }
+    @Test public void showsOnlyRequestedDisplayRoutesWithoutDeviceIdentifiers() {
+        var filter = LaunchLocation.displayRoute(327);
+        assertNull(filter.apply("    mUniqueId=local:1234"));
+        assertEquals("device#1 type=local mCurrentLayerStack=327",
+                filter.apply("    mCurrentLayerStack=327"));
+        assertEquals("mDisplayId=0", filter.apply("    mDisplayId=0"));
+        assertEquals("mPrimaryDisplayDevice=device#1 type=local",
+                filter.apply("    mPrimaryDisplayDevice=Internal(local:1234)"));
+        assertNull(filter.apply("    mDisplayId=328"));
+        assertNull(filter.apply("    mLayerStack=328"));
+        assertEquals("mDisplayId=327", filter.apply("    mDisplayId=327"));
+        assertEquals("mPrimaryDisplayDevice=device#2 type=virtual",
+                filter.apply("    mPrimaryDisplayDevice=Panel (virtual:private-owner)"));
+        assertEquals("mLayerStack=0", filter.apply("    mLayerStack=0"));
+        assertNull(filter.apply("    mBaseDisplayInfo=DisplayInfo{address=private}"));
+    }
+
+    @Test public void projectsExitReasonWithoutDescription() {
+        assertEquals("timestamp=2026-11-25 11:41:00.003 pid=42 reason=4 (CRASH) status=0",
+                LaunchLocation.processExit("ApplicationExitInfo #0: timestamp=2026-11-25 11:41:00.003"
+                        + " pid=42 reason=4 (CRASH) status=0 description=private"));
+        assertEquals("reason=4 (CRASH) subreason=0 (UNKNOWN) status=0",
+                LaunchLocation.processExit("    process=private reason=4 (CRASH) subreason=0 (UNKNOWN) status=0"));
+        assertNull(LaunchLocation.processExit("private trace file"));
+    }
 }

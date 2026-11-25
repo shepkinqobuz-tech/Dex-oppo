@@ -15,6 +15,7 @@ final class TaskTrace {
     private static final String STACK = "timeout 4s am stack list";
     private static final String ACTIVITIES = "timeout 6s dumpsys -t 4 activity activities";
     private static final String WINDOWS = "timeout 5s dumpsys -t 3 window windows";
+    private static final String DISPLAY = "timeout 5s dumpsys -t 3 display";
     private static final Handler timer = new Handler(Looper.getMainLooper());
     private static final int MAX_REPORT_CHARS = 120_000;
     private static final ThreadPoolExecutor snapshots = new ThreadPoolExecutor(
@@ -38,10 +39,15 @@ final class TaskTrace {
         session.after("начало записи", displayId);
     }
 
-    static void stop(int displayId) {
+    static void stop(int displayId, Runnable completed) {
         Session session = active;
         active = null;
-        if (session != null) session.event("Запись остановлена", displayId);
+        if (session == null) {
+            completed.run();
+            return;
+        }
+        session.event("Запись остановлена", displayId);
+        session.finish(completed);
     }
 
     static String report() {
@@ -74,7 +80,7 @@ final class TaskTrace {
             observedPackage = pkg;
             observedDisplay = displayId;
             int number = ++launchNumber;
-            for (int delay : new int[] {500, 2000, 6000, 12000, 16000}) {
+            for (int delay : new int[] {500, 2000, 6000, 12000, 16000, 24000}) {
                 timer.postDelayed(() -> {
                     if (active == this && launchNumber == number) location("запуск +" + delay + " мс");
                 }, delay);
@@ -89,7 +95,25 @@ final class TaskTrace {
             enqueue(label, displayId, () -> {
                 taskCommand(label, displayId, STACK, 4000, LaunchLocation.tasks(pkg));
                 taskCommand(label, displayId, WINDOWS, 4000, LaunchLocation.windows(pkg));
+                if (reason.equals("запуск +2000 мс") || reason.equals("desktop.resume")) {
+                    taskCommand(label, displayId, DISPLAY, 4000, LaunchLocation.displayRoute(displayId));
+                }
             });
+        }
+
+        private void finish(Runnable completed) {
+            String pkg = observedPackage;
+            if (pkg == null || !enqueue("завершение сценария", observedDisplay, () -> {
+                try {
+                    taskCommand("Отображение дисплеев", observedDisplay, DISPLAY, 4000,
+                            LaunchLocation.displayRoute(observedDisplay));
+                    taskCommand("История завершений " + pkg, observedDisplay,
+                            "timeout 5s dumpsys -t 3 activity exit-info '" + pkg + "'", 4000,
+                            LaunchLocation::processExit);
+                } finally {
+                    completed.run();
+                }
+            })) completed.run();
         }
 
         private int size;

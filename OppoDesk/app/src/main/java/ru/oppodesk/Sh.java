@@ -64,32 +64,35 @@ final class Sh {
         });
     }
 
-    static void launchAndMove(String source, int displayId, String start, String move,
-                              String tracedMove) {
+    static void launchAndMove(String source, int displayId, String start, String move) {
         TaskTrace.Session trace = TaskTrace.active();
         pool.execute(() -> {
-            if (trace == null) {
-                publish(execute(start + " >/dev/null;" + move, 6000,
-                        UnaryOperator.identity(), false));
+            if (trace != null) trace.stack("до launch " + source, displayId);
+            Result launch = capture(start, 6000, UnaryOperator.identity());
+            if (trace != null) trace.command("launch " + source, displayId, start, launch);
+            if (failed(launch)) {
+                publish(launch);
                 return;
             }
-            trace.stack("до launch " + source, displayId);
-            Result launch = capture(start, 6000, UnaryOperator.identity());
-            Result relocation = capture(tracedMove, 6000, UnaryOperator.identity());
-            publish(new Result(relocation.startedAt, relocation.durationMs, relocation.exitCode,
-                    relocation.stdout, launch.stderr + "\n" + relocation.stderr));
-            trace.command("launch " + source, displayId, start, launch);
-            trace.command("move " + source, displayId, tracedMove, relocation);
+            Result relocation = capture(move, 6000, UnaryOperator.identity());
+            publish(relocation);
+            if (trace == null) return;
+            trace.command("move " + source, displayId, move, relocation);
             trace.afterCommand("после launch/move " + source, displayId);
         });
+    }
+
+    private static boolean failed(Result result) {
+        String out = result.stdout + "\n" + result.stderr;
+        return result.exitCode != 0 || out.contains("Exception")
+                || out.contains("Error") || out.contains("NOTASK");
     }
 
     private static void publish(Result result) {
         String out = (result.stdout + "\n" + result.stderr).trim();
         lastResult = "Код завершения: " + result.exitCode + "\n"
                 + (out.isEmpty() ? "(нет вывода)" : out);
-        lastError = (result.exitCode != 0 || out.contains("Exception")
-                || out.contains("Error") || out.contains("NOTASK"))
+        lastError = failed(result)
                 ? "Команда не выполнена:\n" + lastResult : "";
     }
 

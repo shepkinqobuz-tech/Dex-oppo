@@ -23,6 +23,7 @@ import java.util.Date;
 public final class DiagnosticsActivity extends Activity {
     private TextView output;
     private Button recording;
+    private Button copy;
     private String report = "";
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -42,7 +43,14 @@ public final class DiagnosticsActivity extends Activity {
         recording = new Button(this);
         recording.setOnClickListener(v -> {
             if (TaskTrace.active() != null) {
-                TaskTrace.stop(targetDisplayId());
+                recording.setEnabled(false);
+                copy.setEnabled(false);
+                TaskTrace.stop(targetDisplayId(), () -> runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    recording.setEnabled(true);
+                    copy.setEnabled(true);
+                    refresh();
+                }));
             } else if (Sh.ready()) {
                 TaskTrace.start(targetDisplayId());
             } else {
@@ -64,7 +72,7 @@ public final class DiagnosticsActivity extends Activity {
             refresh();
         });
         root.addView(tasks);
-        Button copy = new Button(this);
+        copy = new Button(this);
         copy.setText("Скопировать отчёт");
         copy.setOnClickListener(v -> {
             refresh();
@@ -88,6 +96,7 @@ public final class DiagnosticsActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume();
+        TaskTrace.event("diagnostics.resume", targetDisplayId());
         if (output != null) refresh();
     }
 
