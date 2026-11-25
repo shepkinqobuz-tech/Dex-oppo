@@ -106,7 +106,15 @@ public class DesktopActivity extends Activity {
         grid.setVerticalSpacing(dp(12));
         grid.setHorizontalSpacing(dp(8));
         grid.setAdapter(adapter);
-        grid.setOnItemClickListener((p, v, pos, id) -> open(shown.get(pos)));
+        grid.setOnItemClickListener((p, v, pos, id) -> {
+            Apps.Entry entry = shown.get(pos);
+            TaskTrace.Session trace = TaskTrace.active();
+            if (trace != null && trace.tryDesktopLaunch) {
+                tryLaunchFromDesktop(entry, trace);
+            } else {
+                open(entry);
+            }
+        });
 
         root.addView(grid, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -238,6 +246,36 @@ public class DesktopActivity extends Activity {
         if (event.equals("resume") || event.startsWith("focus=")) trace.location("desktop." + event);
     }
 
+    private void tryLaunchFromDesktop(Apps.Entry entry, TaskTrace.Session trace) {
+        Display display = getDisplay();
+        DeskService service = DeskService.instance;
+        if (display == null || display.getDisplayId() == Display.DEFAULT_DISPLAY
+                || service == null || !service.hasDisplay() || display.getDisplayId() != service.displayId()) {
+            trace.event("launch desktop trial skipped: окно рабочего стола вне целевого дисплея",
+                    display == null ? Display.INVALID_DISPLAY : display.getDisplayId());
+            Toast.makeText(this, R.string.desktop_trial_needs_monitor, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int displayId = display.getDisplayId();
+        trace.watch(entry.component.getPackageName(), displayId);
+        trace.event("launch desktop trial " + Apps.key(entry) + " callerTaskId=" + getTaskId(),
+                displayId);
+        try {
+            startActivity(launcherIntent(entry));
+            trace.event("launch desktop trial returned", displayId);
+        } catch (RuntimeException e) {
+            trace.event("launch desktop trial failed " + e.getClass().getSimpleName(), displayId);
+            Toast.makeText(this, R.string.desktop_trial_failed, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private static Intent launcherIntent(Apps.Entry entry) {
+        return new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .setComponent(entry.component)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+    }
+
     private void open(Apps.Entry e) {
         DeskService s = DeskService.instance;
         if (s == null || !s.hasDisplay()) {
@@ -248,11 +286,7 @@ public class DesktopActivity extends Activity {
         // открывается на том же экране. Если прошивка всё же отправит его
         // на телефон, окно будет перенесено командой оболочки.
         try {
-            Intent launch = new Intent(Intent.ACTION_MAIN)
-                    .addCategory(Intent.CATEGORY_LAUNCHER)
-                    .setComponent(e.component)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            Intent launch = launcherIntent(e);
             // Prefer the public Android display-targeting API over shell task moves.
             // ColorOS may ignore this hint; the existing Shizuku fallback remains.
             ActivityOptions options = ActivityOptions.makeBasic();

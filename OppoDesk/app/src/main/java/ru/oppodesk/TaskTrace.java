@@ -22,7 +22,7 @@ final class TaskTrace {
             1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(8),
             runnable -> new Thread(runnable, "OppoDesk task snapshots"));
 
-    private static volatile Session report = new Session();
+    private static volatile Session report = new Session(false);
     private static volatile Session active;
 
     private TaskTrace() {}
@@ -31,11 +31,12 @@ final class TaskTrace {
         return active;
     }
 
-    static void start(int displayId) {
-        Session session = new Session();
+    static void start(int displayId, boolean tryDesktopLaunch) {
+        Session session = new Session(tryDesktopLaunch);
         report = session;
         active = session;
-        session.event("Запись начата", displayId);
+        session.event(tryDesktopLaunch ? "Запись начата с пробным запуском значком" : "Запись начата",
+                displayId);
         session.after("начало записи", displayId);
     }
 
@@ -71,6 +72,12 @@ final class TaskTrace {
 
     static final class Session {
         private final ArrayDeque<String> entries = new ArrayDeque<>();
+        final boolean tryDesktopLaunch;
+
+        Session(boolean tryDesktopLaunch) {
+            this.tryDesktopLaunch = tryDesktopLaunch;
+        }
+
         // Запуск приложения и события DesktopActivity приходят в основном потоке.
         private String observedPackage;
         private int observedDisplay;

@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.view.Display;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -23,6 +24,7 @@ import java.util.Date;
 public final class DiagnosticsActivity extends Activity {
     private TextView output;
     private Button recording;
+    private Button desktopTrial;
     private Button copy;
     private String report = "";
     @Override public void onCreate(Bundle state) {
@@ -44,21 +46,28 @@ public final class DiagnosticsActivity extends Activity {
         recording.setOnClickListener(v -> {
             if (TaskTrace.active() != null) {
                 recording.setEnabled(false);
+                desktopTrial.setEnabled(false);
                 copy.setEnabled(false);
                 TaskTrace.stop(targetDisplayId(), () -> runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
                     recording.setEnabled(true);
+                    desktopTrial.setEnabled(true);
                     copy.setEnabled(true);
                     refresh();
                 }));
-            } else if (Sh.ready()) {
-                TaskTrace.start(targetDisplayId());
             } else {
-                Toast.makeText(this, "Shizuku не готов", Toast.LENGTH_SHORT).show();
+                startRecording(false);
             }
             refresh();
         });
         root.addView(recording);
+        desktopTrial = new Button(this);
+        desktopTrial.setText(R.string.record_desktop_trial);
+        desktopTrial.setOnClickListener(v -> {
+            startRecording(true);
+            refresh();
+        });
+        root.addView(desktopTrial);
         Button tasks = new Button(this);
         tasks.setText("Снять состояние задач Android (только чтение)");
         tasks.setOnClickListener(v -> {
@@ -100,6 +109,14 @@ public final class DiagnosticsActivity extends Activity {
         if (output != null) refresh();
     }
 
+    private void startRecording(boolean tryDesktopLaunch) {
+        if (Sh.ready()) {
+            TaskTrace.start(targetDisplayId(), tryDesktopLaunch);
+        } else {
+            Toast.makeText(this, "Shizuku не готов", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private int targetDisplayId() {
         DeskService service = DeskService.instance;
         if (service != null && service.hasDisplay()) return service.displayId();
@@ -108,8 +125,9 @@ public final class DiagnosticsActivity extends Activity {
     }
 
     private void refresh() {
-        recording.setText(TaskTrace.active() == null
-                ? "Начать запись сценария" : "Остановить запись сценария");
+        boolean isRecording = TaskTrace.active() != null;
+        recording.setText(isRecording ? "Остановить запись сценария" : "Начать запись сценария");
+        desktopTrial.setVisibility(isRecording ? View.GONE : View.VISIBLE);
         StringBuilder s = new StringBuilder();
         s.append("OppoDesk");
         try {
