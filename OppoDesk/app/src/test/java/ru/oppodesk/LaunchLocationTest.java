@@ -58,4 +58,32 @@ public class LaunchLocationTest {
                 LaunchLocation.processExit("    process=private reason=4 (CRASH) subreason=0 (UNKNOWN) status=0"));
         assertNull(LaunchLocation.processExit("private trace file"));
     }
+
+    @Test public void verifiesVisibleSurfaceOnOneDisplayAndInOneWindow() {
+        String snapshot = """
+                window package
+                 mDisplayId=0
+                 mHasSurface=true
+                 isOnScreen=true
+                 isVisible=false
+                window package
+                 mDisplayId=329
+                 mHasSurface=true
+                 isOnScreen=true
+                 isVisible=true
+                """;
+        assertFalse(LaunchLocation.hasVisibleSurface(snapshot, 0));
+        assertFalse(LaunchLocation.hasVisibleSurface(snapshot, 32));
+        assertTrue(LaunchLocation.hasVisibleSurface(snapshot, 329));
+    }
+
+    @Test public void ignoresPackageOwnedStartingWindowWhenCheckingForActivitySurface() {
+        var filter = LaunchLocation.windows(PKG, true);
+        assertNull(filter.apply("  Window #2 Window{f u0 Splash Screen " + PKG + "}:"));
+        assertNull(filter.apply("    mDisplayId=0 rootTaskId=2803"));
+        assertNull(filter.apply("    mOwnerUid=123 package=" + PKG + " appop=NONE"));
+        assertNull(filter.apply("    mHasSurface=true"));
+        assertEquals("window " + PKG, filter.apply("  Window #3 Window{b u0 " + ALIAS + "}:"));
+        assertEquals(" mDisplayId=0", filter.apply("    mDisplayId=0"));
+    }
 }

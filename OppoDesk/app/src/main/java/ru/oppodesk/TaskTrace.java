@@ -31,11 +31,11 @@ final class TaskTrace {
         return active;
     }
 
-    static void start(int displayId, boolean tryDesktopLaunch) {
-        Session session = new Session(tryDesktopLaunch);
+    static void start(int displayId, boolean waitForFirstWindow) {
+        Session session = new Session(waitForFirstWindow);
         report = session;
         active = session;
-        session.event(tryDesktopLaunch ? "Запись начата с пробным запуском значком" : "Запись начата",
+        session.event(waitForFirstWindow ? "Запись начата с переносом после появления окна" : "Запись начата",
                 displayId);
         session.after("начало записи", displayId);
     }
@@ -72,10 +72,10 @@ final class TaskTrace {
 
     static final class Session {
         private final ArrayDeque<String> entries = new ArrayDeque<>();
-        final boolean tryDesktopLaunch;
+        final boolean waitForFirstWindow;
 
-        Session(boolean tryDesktopLaunch) {
-            this.tryDesktopLaunch = tryDesktopLaunch;
+        Session(boolean waitForFirstWindow) {
+            this.waitForFirstWindow = waitForFirstWindow;
         }
 
         // Запуск приложения и события DesktopActivity приходят в основном потоке.

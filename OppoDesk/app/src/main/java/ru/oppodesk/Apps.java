@@ -71,14 +71,20 @@ final class Apps {
      * на экран displayId командой оболочки.
      */
     static void launch(Entry e, int displayId, String source) {
+        launch(e, displayId, source, false);
+    }
+
+    static void launch(Entry e, int displayId, String source, boolean waitForFirstWindow) {
         String pkg = e.component.getPackageName();
         TaskTrace.Session trace = TaskTrace.active();
         if (trace != null) trace.watch(pkg, displayId);
         String cmp = pkg + "/" + e.component.getClassName();
-        String start = "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
+        String start = (waitForFirstWindow ? "timeout 10s am start -W" : "am start")
+                + " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
                 + " -f 0x10200000 -n '" + cmp + "'";
         Sh.launchAndMove(source, displayId, start, ExternalTaskCommands.move(
-                cmp, e.component.flattenToShortString(), displayId));
+                cmp, e.component.flattenToShortString(), displayId),
+                waitForFirstWindow ? pkg : null);
         remember(e);
     }
 

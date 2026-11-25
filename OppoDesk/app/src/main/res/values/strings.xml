@@ -3,7 +3,5 @@
     <string name="app_name">OppoDesk</string>
     <string name="service_label">OppoDesk: курсор и панель задач</string>
     <string name="service_desc">Рисует курсор и панель задач на внешнем экране и передаёт нажатия с тачпада телефона. Содержимое экрана не читает и никуда не отправляет.</string>
-    <string name="record_desktop_trial">Запись с пробным запуском значком</string>
-    <string name="desktop_trial_needs_monitor">Пробный запуск доступен на рабочем столе монитора</string>
-    <string name="desktop_trial_failed">Не удалось запустить приложение. Подробности в записи</string>
+    <string name="record_draw_trial">Запись с переносом после появления окна</string>
 </resources>

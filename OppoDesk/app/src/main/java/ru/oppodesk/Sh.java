@@ -64,7 +64,8 @@ final class Sh {
         });
     }
 
-    static void launchAndMove(String source, int displayId, String start, String move) {
+    static void launchAndMove(String source, int displayId, String start, String move,
+                              String waitForWindowPackage) {
         TaskTrace.Session trace = TaskTrace.active();
         pool.execute(() -> {
             if (trace != null) trace.stack("до launch " + source, displayId);
@@ -74,12 +75,42 @@ final class Sh {
                 publish(launch);
                 return;
             }
+            if (waitForWindowPackage != null
+                    && !waitForVisibleWindow(waitForWindowPackage, displayId, trace)) {
+                return;
+            }
             Result relocation = capture(move, 6000, UnaryOperator.identity());
             publish(relocation);
             if (trace == null) return;
             trace.command("move " + source, displayId, move, relocation);
             trace.afterCommand("после launch/move " + source, displayId);
         });
+    }
+
+    private static boolean waitForVisibleWindow(String pkg, int displayId, TaskTrace.Session trace) {
+        String script = "timeout 3s dumpsys -t 2 window windows";
+        Result snapshot = null;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            snapshot = capture(script, 4000, LaunchLocation.windows(pkg, true));
+            if (trace != null) trace.command("Окно перед переносом " + pkg, displayId, script, snapshot);
+            if (snapshot.exitCode() != 0) break;
+            if (LaunchLocation.hasVisibleSurface(snapshot.stdout(), 0)
+                    || LaunchLocation.hasVisibleSurface(snapshot.stdout(), displayId)) {
+                return true;
+            }
+            if (attempt == 4) break;
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        String message = "Пробный перенос пропущен: видимое окно " + pkg + " не подтверждено";
+        if (trace != null) trace.event(message, displayId);
+        publish(new Result(snapshot.startedAt(), snapshot.durationMs(), 1,
+                snapshot.stdout(), message + "\n" + snapshot.stderr()));
+        return false;
     }
 
     private static boolean failed(Result result) {

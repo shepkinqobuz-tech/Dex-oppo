@@ -1,5 +1,6 @@
 package ru.oppodesk;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -86,7 +87,23 @@ final class LaunchLocation {
         return summary.length() > 0 ? summary.toString() : null;
     }
 
+    static boolean hasVisibleSurface(String snapshot, int displayId) {
+        String displayField = "mDisplayId=" + displayId;
+        for (String window : snapshot.split("(?m)(?=^window )")) {
+            var fields = Arrays.asList(window.split("\\s+"));
+            if (fields.contains(displayField) && fields.contains("mHasSurface=true")
+                    && fields.contains("isOnScreen=true") && fields.contains("isVisible=true")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static UnaryOperator<String> windows(String pkg) {
+        return windows(pkg, false);
+    }
+
+    static UnaryOperator<String> windows(String pkg, boolean activityOnly) {
         Pattern component = Pattern.compile("\\bu\\d+\\s+" + Pattern.quote(pkg) + "/");
         Pattern owner = Pattern.compile("(?:^|\\s)package=" + Pattern.quote(pkg) + "(?=\\s|$)");
         Pattern fields = Pattern.compile("\\b(?:mDisplayId=-?\\d+|rootTaskId=-?\\d+"
@@ -106,7 +123,7 @@ final class LaunchLocation {
                 }
                 if (!row.isEmpty() && !line.startsWith("    ")) inWindow = false;
                 if (!inWindow) return null;
-                boolean foundOwner = !matches && owner.matcher(row).find();
+                boolean foundOwner = !activityOnly && !matches && owner.matcher(row).find();
                 if (foundOwner) matches = true;
                 Matcher m = fields.matcher(row);
                 while (m.find()) pending.append(' ').append(m.group());
