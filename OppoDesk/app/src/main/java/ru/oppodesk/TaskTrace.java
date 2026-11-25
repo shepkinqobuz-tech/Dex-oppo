@@ -16,6 +16,7 @@ final class TaskTrace {
     private static final String ACTIVITIES = "timeout 6s dumpsys -t 4 activity activities";
     private static final String WINDOWS = "timeout 5s dumpsys -t 3 window windows";
     private static final String DISPLAY = "timeout 5s dumpsys -t 3 display";
+    private static final String COMPOSITION = "timeout 5s dumpsys -t 3 SurfaceFlinger --comp-displays";
     private static final Handler timer = new Handler(Looper.getMainLooper());
     private static final int MAX_REPORT_CHARS = 120_000;
     private static final ThreadPoolExecutor snapshots = new ThreadPoolExecutor(
@@ -102,6 +103,10 @@ final class TaskTrace {
             enqueue(label, displayId, () -> {
                 taskCommand(label, displayId, STACK, 4000, LaunchLocation.tasks(pkg));
                 taskCommand(label, displayId, WINDOWS, 4000, LaunchLocation.windows(pkg));
+                if (reason.equals("запуск +2000 мс") || reason.equals("запуск +6000 мс")) {
+                    taskCommand("Композиция SurfaceFlinger / " + reason, displayId, COMPOSITION,
+                            8000, SurfaceComposition.project(pkg));
+                }
                 if (reason.equals("запуск +2000 мс") || reason.equals("desktop.resume")) {
                     taskCommand(label, displayId, DISPLAY, 4000, LaunchLocation.displayRoute(displayId));
                 }
