@@ -256,7 +256,12 @@ public class DesktopActivity extends Activity {
             trace.event("LauncherApps: вызов вернулся " + Apps.key(entry), displayId);
             Apps.remember(entry);
         } catch (RuntimeException ex) {
-            trace.event("LauncherApps: " + ex.getClass().getSimpleName(), displayId);
+            String reason = ex.getMessage();
+            if (reason == null || reason.trim().isEmpty()) {
+                reason = "Android не передал текст ошибки";
+            }
+            trace.event("LauncherApps: " + ex.getClass().getSimpleName() + " — "
+                    + reason.replace('\n', ' ').replace('\r', ' '), displayId);
             Toast.makeText(desktop, "Прямой запуск не удался. Подробности в отчёте.",
                     Toast.LENGTH_LONG).show();
         }
