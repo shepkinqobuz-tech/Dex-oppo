@@ -3,6 +3,8 @@ package ru.oppodesk;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.content.Intent;
+import android.content.pm.LauncherApps;
+import android.os.Process;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.display.DisplayManager;
@@ -236,6 +238,28 @@ public class DesktopActivity extends Activity {
         trace.event("desktop." + event + " taskId=" + getTaskId(),
                 display == null ? Display.INVALID_DISPLAY : display.getDisplayId());
         if (event.equals("resume") || event.startsWith("focus=")) trace.location("desktop." + event);
+    }
+
+    static void launchViaLauncher(Apps.Entry entry, int displayId, TaskTrace.Session trace) {
+        DesktopActivity desktop = current;
+        if (desktop == null || desktop.isFinishing() || desktop.isDestroyed()
+                || desktop.getDisplay() == null || desktop.getDisplay().getDisplayId() != displayId) {
+            trace.event("LauncherApps: рабочий стол на выбранном мониторе недоступен", displayId);
+            return;
+        }
+        trace.watch(entry.component.getPackageName(), displayId);
+        ActivityOptions options = ActivityOptions.makeBasic();
+        options.setLaunchDisplayId(displayId);
+        try {
+            desktop.getSystemService(LauncherApps.class).startMainActivity(
+                    entry.component, Process.myUserHandle(), null, options.toBundle());
+            trace.event("LauncherApps: вызов вернулся " + Apps.key(entry), displayId);
+            Apps.remember(entry);
+        } catch (RuntimeException ex) {
+            trace.event("LauncherApps: " + ex.getClass().getSimpleName(), displayId);
+            Toast.makeText(desktop, "Прямой запуск не удался. Подробности в отчёте.",
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void open(Apps.Entry e) {

@@ -330,8 +330,12 @@ public class DeskService extends AccessibilityService implements DisplayManager.
                     closeStartMenu("selection");
                     if (hasDisplay() && Sh.ready()) {
                         TaskTrace.Session trace = TaskTrace.active();
+                        if (trace != null && trace.mode == TaskTrace.Mode.LAUNCHER) {
+                            DesktopActivity.launchViaLauncher(e, displayId, trace);
+                            return;
+                        }
                         Apps.launch(e, displayId, "start " + source,
-                                trace != null && trace.waitForFirstWindow);
+                                trace != null && trace.mode == TaskTrace.Mode.WAIT_FOR_WINDOW);
                     } else {
                         lastError = "Shizuku не готов или монитор отключён";
                         TaskTrace.event("start.launch skipped " + lastError, displayId);

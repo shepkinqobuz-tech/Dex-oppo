@@ -4,4 +4,5 @@
     <string name="service_label">OppoDesk: курсор и панель задач</string>
     <string name="service_desc">Рисует курсор и панель задач на внешнем экране и передаёт нажатия с тачпада телефона. Содержимое экрана не читает и никуда не отправляет.</string>
     <string name="record_draw_trial">Запись с переносом после появления окна</string>
+    <string name="record_launcher_trial">Запись с прямым запуском через LauncherApps</string>
 </resources>

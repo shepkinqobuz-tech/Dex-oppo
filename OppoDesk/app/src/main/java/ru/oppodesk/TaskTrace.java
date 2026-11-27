@@ -23,7 +23,16 @@ final class TaskTrace {
             1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(8),
             runnable -> new Thread(runnable, "OppoDesk task snapshots"));
 
-    private static volatile Session report = new Session(false);
+    enum Mode {
+        NORMAL("Запись начата"),
+        WAIT_FOR_WINDOW("Запись начата с переносом после появления окна"),
+        LAUNCHER("Запись с прямым запуском через LauncherApps");
+
+        final String label;
+        Mode(String label) { this.label = label; }
+    }
+
+    private static volatile Session report = new Session(Mode.NORMAL);
     private static volatile Session active;
 
     private TaskTrace() {}
@@ -32,12 +41,11 @@ final class TaskTrace {
         return active;
     }
 
-    static void start(int displayId, boolean waitForFirstWindow) {
-        Session session = new Session(waitForFirstWindow);
+    static void start(int displayId, Mode mode) {
+        Session session = new Session(mode);
         report = session;
         active = session;
-        session.event(waitForFirstWindow ? "Запись начата с переносом после появления окна" : "Запись начата",
-                displayId);
+        session.event(mode.label, displayId);
         session.after("начало записи", displayId);
     }
 
@@ -73,10 +81,10 @@ final class TaskTrace {
 
     static final class Session {
         private final ArrayDeque<String> entries = new ArrayDeque<>();
-        final boolean waitForFirstWindow;
+        final Mode mode;
 
-        Session(boolean waitForFirstWindow) {
-            this.waitForFirstWindow = waitForFirstWindow;
+        Session(Mode mode) {
+            this.mode = mode;
         }
 
         // Запуск приложения и события DesktopActivity приходят в основном потоке.
