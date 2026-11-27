@@ -65,3 +65,9 @@ Dev17 добавляет снимки `dumpsys SurfaceFlinger --comp-displays` �
 ## 0.9-dev19
 
 В dev18 на прошивке CPH2841_17.0.1.201(EX01) прямой запуск Chrome через LauncherApps на дисплей 93 вызвал SecurityException через 8 мс после выбора. В снимках до 12 секунд задача и окно Chrome отсутствовали. На 2-й и 6-й секундах SurfaceFlinger показывал DesktopActivity на внешнем физическом выходе и MainActivity на внутреннем. В dev19 строка LauncherApps содержит тип исключения и сообщение Android, если система его передала. Для проверки запустите Chrome в том же режиме записи и скопируйте строку отказа.
+
+## 0.9-dev20
+
+В dev19 Android отклонил запуск Chrome от UID OppoDesk с явно заданным launchDisplayId=94. Текст ошибки совпадает с проверкой isCallerAllowedToLaunchOnDisplay в AOSP. Для публичного доверенного дисплея одна из ветвей проверяет видимость пользователя на данном дисплее. Конкретная реализация ColorOS требует проверки. [ActivityTaskSupervisor.java](https://github.com/aosp-mirror/platform_frameworks_base/blob/master/services/core/java/com/android/server/wm/ActivityTaskSupervisor.java)
+
+Ручной снимок запрашивает видимость текущего пользователя отдельно для телефона и подключённого монитора. Команда вывода отчёта также показывает заявленную поддержку активностей на дополнительных дисплеях. Для проверки откройте диагностику при подключённом мониторе и нажмите «Снять состояние задач Android (только чтение)».

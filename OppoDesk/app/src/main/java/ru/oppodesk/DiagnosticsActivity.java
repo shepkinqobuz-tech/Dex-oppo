@@ -192,6 +192,8 @@ public final class DiagnosticsActivity extends Activity {
         s.append("Последняя shell-команда: ").append(Sh.lastResult).append("\n");
         s.append("\nВОЗМОЖНОСТИ\n");
         PackageManager pm = getPackageManager();
+        s.append("Активности на дополнительных дисплеях: ").append(pm.hasSystemFeature(
+                PackageManager.FEATURE_ACTIVITIES_ON_SECONDARY_DISPLAYS)).append("\n");
         s.append("Freeform: ").append(pm.hasSystemFeature("android.software.freeform_window_management")).append("\n");
         s.append("Picture-in-Picture: ").append(pm.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)).append("\n");
         s.append("Режим разработчика: ");

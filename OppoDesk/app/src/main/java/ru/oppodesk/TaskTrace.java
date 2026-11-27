@@ -72,6 +72,10 @@ final class TaskTrace {
     static void manualSnapshot(int displayId, Runnable completed) {
         Session session = report;
         if (!session.enqueue("ручной снимок", displayId, () -> {
+            session.userVisibility(android.view.Display.DEFAULT_DISPLAY);
+            if (displayId > android.view.Display.DEFAULT_DISPLAY) {
+                session.userVisibility(displayId);
+            }
             session.snapshot("ручной снимок", displayId);
             completed.run();
         })) {
@@ -165,6 +169,12 @@ final class TaskTrace {
                 event("Пропущен снимок (очередь заполнена): " + label, displayId);
                 return false;
             }
+        }
+
+        private void userVisibility(int displayId) {
+            taskCommand("Видимость текущего пользователя", displayId,
+                    "timeout 4s cmd user is-user-visible --display " + displayId + " current",
+                    1000, UnaryOperator.identity());
         }
 
         private void snapshot(String label, int displayId) {

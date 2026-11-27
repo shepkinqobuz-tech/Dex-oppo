@@ -6,8 +6,8 @@ android {
         applicationId 'ru.oppodesk'
         minSdk 31
         targetSdk 35
-        versionCode 27
-        versionName '0.9-dev19'
+        versionCode 28
+        versionName '0.9-dev20'
     }
     signingConfigs {
         debug {
